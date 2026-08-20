@@ -3,138 +3,156 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>焰池 FluxPool — Cloudflare 号池生图</title>
+<title>焰池 FluxPool</title>
 <style>
 :root {
-  --bg: #f6efe6;
-  --bg2: #ead9c6;
-  --card: rgba(255,251,246,.86);
-  --card-solid: #fffaf4;
-  --text: #2a1c14;
-  --muted: #8a6d57;
-  --line: rgba(90,50,24,.12);
-  --brand: #e25b2a;
-  --brand2: #f0a202;
-  --ok: #12805c;
-  --err: #c43c2c;
-  --shadow: 0 18px 50px rgba(90,40,10,.12);
-  --radius: 18px;
+  --bg: #f4eee6;
+  --ink: #1b1410;
+  --muted: #7a6556;
+  --card: rgba(255,250,244,.72);
+  --solid: #fffaf4;
+  --line: rgba(80,48,24,.12);
+  --brand: #e85d2c;
+  --gold: #f0b429;
+  --ok: #1f8a66;
+  --err: #d13b2e;
+  --shadow: 0 24px 60px rgba(70,30,8,.12);
+  --radius: 22px;
 }
 [data-theme="dark"] {
-  --bg: #140d0a;
-  --bg2: #24160f;
-  --card: rgba(36,22,16,.82);
-  --card-solid: #1c120e;
-  --text: #ffeede;
-  --muted: #c4a28a;
-  --line: rgba(255,180,120,.12);
-  --shadow: 0 18px 50px rgba(0,0,0,.4);
+  --bg: #0c0a09;
+  --ink: #f6efe6;
+  --muted: #b9a394;
+  --card: rgba(28,22,18,.72);
+  --solid: #171210;
+  --line: rgba(255,210,170,.12);
+  --shadow: 0 24px 70px rgba(0,0,0,.45);
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; min-height: 100%; }
 body {
   font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-  background:
-    radial-gradient(1100px 480px at 8% -10%, rgba(226,91,42,.28), transparent 55%),
-    radial-gradient(900px 420px at 100% 0%, rgba(240,162,2,.18), transparent 50%),
-    var(--bg);
-  color: var(--text);
+  color: var(--ink);
+  background: var(--bg);
   line-height: 1.55;
 }
-button, input, select, textarea { font: inherit; }
+body::before {
+  content: "";
+  position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  background:
+    radial-gradient(900px 420px at 12% -8%, rgba(232,93,44,.28), transparent 55%),
+    radial-gradient(720px 380px at 92% 0%, rgba(240,180,41,.16), transparent 50%),
+    radial-gradient(700px 500px at 80% 110%, rgba(232,93,44,.08), transparent 45%);
+}
+body::after {
+  content: "";
+  position: fixed; inset: 0; pointer-events: none; z-index: 0; opacity: .18;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.35'/%3E%3C/svg%3E");
+}
+button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; }
-.app { max-width: 1280px; margin: 0 auto; padding: 22px 18px 40px; }
-.nav { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
-.brand { display: flex; align-items: center; gap: 12px; }
+.app { position: relative; z-index: 1; max-width: 1320px; margin: 0 auto; padding: 28px 20px 56px; }
+.nav {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  margin-bottom: 22px;
+}
+.brand { display: flex; align-items: center; gap: 14px; }
 .logo {
-  width: 42px; height: 42px; border-radius: 14px;
-  background: linear-gradient(135deg, var(--brand), var(--brand2));
-  display: grid; place-items: center; color: #fff; font-weight: 800;
-  box-shadow: 0 10px 24px rgba(226,91,42,.35);
+  width: 48px; height: 48px; border-radius: 16px;
+  display: grid; place-items: center;
+  color: #fff; font-family: Georgia, "Palatino Linotype", "Songti SC", serif; font-size: 26px;
+  background: linear-gradient(145deg, #ff7a3c, #e85d2c 45%, #c2410c);
+  box-shadow: 0 12px 28px rgba(232,93,44,.35);
 }
-.brand h1 { margin: 0; font-size: 18px; }
-.brand p { margin: 0; color: var(--muted); font-size: 12px; }
-.nav-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-.icon-btn, .ghost {
-  border: 1px solid var(--line); background: var(--card); color: var(--text);
-  border-radius: 12px; padding: 8px 12px; backdrop-filter: blur(16px);
-  text-decoration: none; display: inline-flex; align-items: center; font-size: 13px;
+.brand h1 {
+  margin: 0; font-family: Georgia, "Palatino Linotype", "Songti SC", serif; font-size: 28px; font-weight: 400; letter-spacing: .02em;
 }
-.health {
-  display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px;
+.brand p { margin: 2px 0 0; color: var(--muted); font-size: 12px; }
+.nav-actions { display: flex; gap: 8px; }
+.ghost {
+  border: 1px solid var(--line); background: var(--card); color: var(--ink);
+  border-radius: 999px; padding: 8px 14px; backdrop-filter: blur(18px);
+  font-size: 13px; font-weight: 500;
 }
+.ghost:hover { border-color: var(--brand); }
+.health { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
 .pill {
   background: var(--card); border: 1px solid var(--line); border-radius: 999px;
-  padding: 6px 10px; font-size: 12px; color: var(--muted);
+  padding: 7px 12px; font-size: 12px; color: var(--muted); backdrop-filter: blur(16px);
 }
-.pill b { color: var(--text); }
-.layout { display: grid; grid-template-columns: 390px 1fr; gap: 16px; }
+.pill b { color: var(--ink); font-weight: 600; }
+.layout { display: grid; grid-template-columns: 400px 1fr; gap: 18px; }
 .panel, .stage, .history {
   background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
-  box-shadow: var(--shadow); backdrop-filter: blur(18px);
+  box-shadow: var(--shadow); backdrop-filter: blur(22px);
 }
-.panel { padding: 16px; }
-.stage { min-height: 620px; padding: 16px; display: flex; flex-direction: column; }
-label { display: block; font-size: 12px; color: var(--muted); margin: 12px 0 6px; font-weight: 600; }
+.panel { padding: 18px; }
+.stage { min-height: 680px; padding: 18px; display: flex; flex-direction: column; }
+label { display: block; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 14px 0 7px; font-weight: 600; }
 textarea, input[type=text], input[type=number], input[type=password], select {
-  width: 100%; border: 1px solid var(--line); background: var(--card-solid);
-  color: var(--text); border-radius: 12px; padding: 11px 12px; outline: none;
+  width: 100%; border: 1px solid var(--line); background: var(--solid);
+  border-radius: 14px; padding: 12px 13px; outline: none;
 }
-textarea { min-height: 120px; resize: vertical; }
-textarea:focus, input:focus, select:focus { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(226,91,42,.15); }
+textarea { min-height: 128px; resize: vertical; }
+textarea:focus, input:focus, select:focus { border-color: var(--brand); box-shadow: 0 0 0 4px rgba(232,93,44,.12); }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip {
   border: 1px solid var(--line); background: transparent; color: var(--muted);
-  border-radius: 999px; padding: 6px 10px; font-size: 12px;
+  border-radius: 999px; padding: 6px 11px; font-size: 12px;
 }
-.chip.on { color: var(--brand); border-color: var(--brand); background: rgba(226,91,42,.1); font-weight: 600; }
+.chip.on { color: var(--brand); border-color: var(--brand); background: rgba(232,93,44,.1); font-weight: 600; }
 .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .drop {
-  border: 1px dashed var(--line); border-radius: 14px; padding: 14px; color: var(--muted);
-  font-size: 13px; text-align: center; background: rgba(226,91,42,.04); cursor: pointer;
+  border: 1px dashed var(--line); border-radius: 16px; padding: 18px; color: var(--muted);
+  font-size: 13px; text-align: center; background: rgba(232,93,44,.04); cursor: pointer;
 }
+.drop:hover { border-color: var(--brand); color: var(--brand); }
 .thumbs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 .thumbs .t { position: relative; }
-.thumbs img { width: 68px; height: 68px; object-fit: cover; border-radius: 10px; display: block; border: 1px solid var(--line); }
+.thumbs img { width: 68px; height: 68px; object-fit: cover; border-radius: 12px; display: block; border: 1px solid var(--line); }
 .thumbs button {
   position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; border: 0;
   border-radius: 50%; background: #111; color: #fff; font-size: 11px;
 }
 .primary {
-  width: 100%; margin-top: 14px; border: 0; color: #fff; font-weight: 700;
-  border-radius: 14px; padding: 13px 16px;
-  background: linear-gradient(135deg, var(--brand), #f07f3a 55%, var(--brand2));
-  box-shadow: 0 10px 24px rgba(226,91,42,.28);
+  width: 100%; margin-top: 16px; border: 0; color: #fff; font-weight: 700;
+  border-radius: 16px; padding: 14px 16px; letter-spacing: .04em;
+  background: linear-gradient(135deg, #ff8a4c, var(--brand) 45%, #c2410c);
+  box-shadow: 0 14px 28px rgba(232,93,44,.28);
 }
+.primary:hover { filter: brightness(1.05); }
 .primary:disabled { opacity: .55; cursor: wait; }
 .hints { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-.hint { border: 0; background: rgba(226,91,42,.08); color: var(--text); border-radius: 10px; padding: 6px 8px; font-size: 11px; }
+.hint { border: 0; background: rgba(232,93,44,.08); color: var(--ink); border-radius: 10px; padding: 6px 8px; font-size: 11px; }
 .stage-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.stage-head strong { font-family: Georgia, "Palatino Linotype", "Songti SC", serif; font-size: 22px; font-weight: 400; }
 .stage-body { flex: 1; display: grid; place-items: center; margin-top: 12px; }
 .empty { text-align: center; color: var(--muted); }
 .empty .frame {
-  width: min(420px, 100%); aspect-ratio: 1; margin: 0 auto 12px; border-radius: 22px;
+  width: min(380px, 100%); aspect-ratio: 1; margin: 0 auto 14px; border-radius: 28px;
   border: 1px dashed var(--line); display: grid; place-items: center;
-  background: linear-gradient(180deg, rgba(226,91,42,.08), transparent); font-size: 42px;
+  background: linear-gradient(180deg, rgba(232,93,44,.1), transparent);
+  font-family: Georgia, "Palatino Linotype", "Songti SC", serif; font-size: 72px; color: var(--brand);
 }
-.result img { max-width: 100%; max-height: 62vh; border-radius: 16px; display: block; margin: 0 auto; }
-.meta { color: var(--muted); font-size: 12px; margin-top: 8px; text-align: center; }
+.result img { max-width: 100%; max-height: 64vh; border-radius: 18px; display: block; margin: 0 auto; box-shadow: 0 20px 50px rgba(0,0,0,.18); }
+.meta { color: var(--muted); font-size: 12px; margin-top: 10px; text-align: center; }
 .actions { display: flex; justify-content: center; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
 .status { min-height: 20px; font-size: 13px; color: var(--muted); margin-top: 8px; word-break: break-all; }
 .status.err { color: var(--err); font-weight: 500; }
 .status.ok { color: var(--ok); font-weight: 500; }
-.history { margin-top: 16px; padding: 14px; }
-.history h3 { margin: 0 0 10px; font-size: 14px; }
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
-.card { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--card-solid); cursor: pointer; }
-.card img { width: 100%; height: 120px; object-fit: cover; display: block; }
-.card .c { padding: 8px; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.history { margin-top: 18px; padding: 16px; }
+.history h3 { margin: 0 0 12px; font-family: Georgia, "Palatino Linotype", "Songti SC", serif; font-size: 22px; font-weight: 400; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 12px; }
+.card { border: 1px solid var(--line); border-radius: 16px; overflow: hidden; background: var(--solid); cursor: pointer; transition: transform .18s ease; }
+.card:hover { transform: translateY(-3px); }
+.card img { width: 100%; height: 128px; object-fit: cover; display: block; }
+.card .c { padding: 8px 10px; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .adv { display: none; margin-top: 4px; }
 .adv.on { display: block; }
 .toast-wrap { position: fixed; right: 16px; bottom: 16px; display: grid; gap: 8px; z-index: 20; }
-.toast { background: var(--card-solid); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; box-shadow: var(--shadow); font-size: 13px; }
-.tip-badge { font-size: 11px; background: rgba(226,91,42,.12); color: var(--brand); padding: 2px 6px; border-radius: 6px; margin-left: 4px; font-weight: normal; }
-@media (max-width: 960px) { .layout { grid-template-columns: 1fr; } .stage { min-height: 420px; } }
+.toast { background: var(--solid); color: var(--ink); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; box-shadow: var(--shadow); font-size: 13px; }
+.tip-badge { font-size: 10px; letter-spacing: .06em; background: rgba(232,93,44,.12); color: var(--brand); padding: 2px 7px; border-radius: 999px; margin-left: 6px; font-weight: 700; }
+@media (max-width: 960px) { .layout { grid-template-columns: 1fr; } .stage { min-height: 420px; } .brand h1 { font-size: 22px; } }
 </style>
 </head>
 <body>
@@ -144,11 +162,11 @@ textarea:focus, input:focus, select:focus { border-color: var(--brand); box-shad
       <div class="logo">焰</div>
       <div>
         <h1>焰池 FluxPool</h1>
-        <p>Cloudflare Workers AI 号池 · 神经元用尽自动换号</p>
+        <p>Cloudflare 号池生图 · 额度用尽自动换号</p>
       </div>
     </div>
     <div class="nav-actions">
-      <button class="ghost" id="themeBtn" type="button">切换主题</button>
+      <button class="ghost" id="themeBtn" type="button">主题</button>
       <button class="ghost" id="healthBtn" type="button">刷新号池</button>
     </div>
   </div>
@@ -184,17 +202,17 @@ textarea:focus, input:focus, select:focus { border-color: var(--brand); box-shad
         <input id="apiKey" type="password" placeholder="没有就留空">
       </div>
       <button class="primary" id="go" type="button">生成图像</button>
-      <div class="status" id="status">快捷键：Ctrl + Enter。某个账号当天神经元用尽后会自动换下一个，不再重复打空号。</div>
+      <div class="status" id="status">快捷键 Ctrl + Enter。额度用尽会自动换号。</div>
     </aside>
     <section class="stage">
       <div class="stage-head">
-        <strong>画布预览</strong>
+        <strong>画布</strong>
         <span class="status" id="elapsed"></span>
       </div>
       <div class="stage-body" id="canvas">
         <div class="empty">
           <div class="frame">焰</div>
-          <div>输入提示词，点击生成。号池会轮询，额度用尽自动跳号。</div>
+          <div>输入提示词，点生成。号池会轮询，额度用尽自动跳号。</div>
         </div>
       </div>
     </section>
@@ -374,10 +392,14 @@ textarea:focus, input:focus, select:focus { border-color: var(--brand); box-shad
   }
   loadModels();
   $("model").addEventListener("change", function () {
-    if ($("model").value === "flux-2-dev") {
-      setStatus("FLUX.2 Dev 可以用。大约 30-90 秒，请保持页面开着，不要刷新。");
+    var m = $("model").value;
+    if (m === "moondream3.1-9B-A2B") {
+      $("go").textContent = "识别图像";
+      setStatus("Moondream 是看图模型，不能生图。请上传图片，提示词当作问题。");
     } else {
-      setStatus("快捷键：Ctrl + Enter。某个账号当天神经元用尽后会自动换下一个。");
+      $("go").textContent = "生成图像";
+      if (m === "flux-2-dev") setStatus("FLUX.2 Dev 较慢，请保持页面开着。");
+      else setStatus("快捷键：Ctrl + Enter。额度用尽会自动换号。");
     }
   });
 
@@ -551,6 +573,26 @@ textarea:focus, input:focus, select:focus { border-color: var(--brand); box-shad
       $("elapsed").textContent = ((Date.now() - started) / 1000).toFixed(1) + "s";
     }, 200);
     try {
+      if ($("model").value === "moondream3.1-9B-A2B") {
+        if (!state.images.length) throw new Error("Moondream 需要先上传图片");
+        var vis = await api("/api/vision", {
+          method: "POST",
+          headers: headers(),
+          body: JSON.stringify({
+            model: "moondream3.1-9B-A2B",
+            task: "query",
+            prompt: prompt,
+            question: prompt,
+            images: state.images
+          })
+        });
+        var text = vis.answer || vis.caption || JSON.stringify(vis.raw || vis, null, 2);
+        $("canvas").innerHTML = "<div class=\"result\"><img src=\"" + state.images[0] + "\"><div class=\"meta\">Moondream · " + (vis.account || "") + "</div><pre style=\"white-space:pre-wrap;text-align:left;max-width:720px;margin:12px auto 0;padding:12px;border-radius:12px;background:var(--card-solid);\">" + text.replace(/</g, "&lt;") + "</pre></div>";
+        setStatus("识别完成 · " + (vis.account || ""), "ok");
+        toast("识别完成");
+        loadHealth();
+        return;
+      }
       var payload = {
         prompt: (state.style || "") + prompt,
         model: $("model").value || "flux-2-klein-4b",
