@@ -11,10 +11,10 @@
                  radial-gradient(1000px 500px at 95% 5%, rgba(168, 85, 247, 0.25), transparent 55%),
                  radial-gradient(800px 600px at 50% 100%, rgba(56, 189, 248, 0.2), transparent 50%),
                  #f8f6fd;
-  --card-bg: rgba(255, 255, 255, 0.78);
+  --card-bg: rgba(255, 255, 255, 0.82);
   --card-solid: #ffffff;
-  --card-border: rgba(168, 85, 247, 0.16);
-  --card-hover: rgba(255, 255, 255, 0.92);
+  --card-border: rgba(168, 85, 247, 0.18);
+  --card-hover: rgba(255, 255, 255, 0.95);
   --text: #231c36;
   --text-muted: #796f94;
   --primary: #a855f7;
@@ -35,10 +35,10 @@
                  radial-gradient(1000px 500px at 95% 5%, rgba(147, 51, 234, 0.3), transparent 55%),
                  radial-gradient(800px 600px at 50% 100%, rgba(14, 165, 233, 0.18), transparent 50%),
                  #0b0914;
-  --card-bg: rgba(23, 18, 38, 0.72);
+  --card-bg: rgba(23, 18, 38, 0.78);
   --card-solid: #171226;
-  --card-border: rgba(168, 85, 247, 0.22);
-  --card-hover: rgba(30, 24, 51, 0.85);
+  --card-border: rgba(168, 85, 247, 0.24);
+  --card-hover: rgba(30, 24, 51, 0.88);
   --text: #f5f3ff;
   --text-muted: #9d92b8;
   --primary: #c084fc;
@@ -273,6 +273,17 @@ textarea, input[type=text], input[type=number], input[type=password], select {
   transition: all 0.2s ease;
 }
 
+select {
+  cursor: pointer;
+  appearance: auto;
+}
+
+select option {
+  background: var(--card-solid);
+  color: var(--text);
+  padding: 8px;
+}
+
 textarea {
   min-height: 120px;
   resize: vertical;
@@ -416,8 +427,8 @@ textarea:focus, input:focus, select:focus {
   border: 1px dashed var(--card-border);
   color: var(--text-muted);
   border-radius: 12px;
-  padding: 9px;
-  font-size: 12px;
+  padding: 10px;
+  font-size: 12.5px;
   font-weight: 600;
   transition: all 0.2s ease;
 }
@@ -468,21 +479,9 @@ textarea:focus, input:focus, select:focus {
   overflow: hidden;
 }
 
-.primary-btn::after {
-  content: "";
-  position: absolute;
-  top: 0; left: -100%; width: 100%; height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent);
-  transition: left 0.6s ease;
-}
-
 .primary-btn:hover:not(:disabled) {
   transform: translateY(-2px);
   box-shadow: 0 16px 36px var(--primary-glow);
-}
-
-.primary-btn:hover::after {
-  left: 100%;
 }
 
 .primary-btn:disabled {
@@ -563,7 +562,6 @@ textarea:focus, input:focus, select:focus {
   display: grid;
   place-items: center;
   background: radial-gradient(circle, rgba(168, 85, 247, 0.12), transparent 70%);
-  position: relative;
   box-shadow: 0 0 35px rgba(168, 85, 247, 0.12);
   animation: pulseGlow 4s ease-in-out infinite alternate;
 }
@@ -754,9 +752,13 @@ textarea:focus, input:focus, select:focus {
   </header>
 
   <!-- Health Info Bar -->
-  <section class="health" id="health"></section>
+  <section class="health" id="health">
+    <span class="pill"><span class="pill-dot"></span> 状态库 <b>加载中…</b></span>
+    <span class="pill">🌸 可用号池 <b>--</b></span>
+    <span class="pill">⚡ 今日神经元耗尽 <b>0</b></span>
+  </section>
 
-  <!-- Main Canvas & Control Layout -->
+  <!-- Main Layout -->
   <main class="layout">
     <!-- Left Panel -->
     <aside class="panel">
@@ -767,27 +769,59 @@ textarea:focus, input:focus, select:focus {
       </div>
       <textarea id="prompt" placeholder="例如：唯美日系动漫少女，樱花雨落，新海诚风天空，治愈系微风，精致五官，超高细节"></textarea>
       
-      <!-- Quick Anime Prompt Chips -->
-      <div class="hints" id="hints"></div>
+      <!-- Quick Anime Prompt Chips (Pre-rendered) -->
+      <div class="hints" id="hints">
+        <button type="button" class="hint" data-prompt="唯美日系少女，樱花雨落，新海诚风天空，治愈系微风，精致五官">🌸 唯美少女</button>
+        <button type="button" class="hint" data-prompt="赛博朋克机娘，浮游光翼，霓虹发丝，机械装甲细节，夜景光晕">✨ 赛博机娘</button>
+        <button type="button" class="hint" data-prompt="银河星海与奇幻空岛，漂浮的水晶鲸鱼，发光水母，梦幻童话">🌌 奇幻星海</button>
+        <button type="button" class="hint" data-prompt="仙侠白发剑修少女，流云仙雾，红衣胜枫，手持青锋，唯美厚涂">🏯 唯美仙侠</button>
+        <button type="button" class="hint" data-prompt="可爱猫耳少女女仆装，捧着一杯草莓奶茶，Q版粘土质感，柔和打光">🍡 治愈Q版</button>
+        <button type="button" class="hint" data-prompt="黄昏车站与放学后的少女，逆光发丝金边，电车与云海，电影感">🌇 胶片黄昏</button>
+      </div>
 
-      <!-- Model Selector -->
+      <!-- Model Selector (Pre-rendered options) -->
       <div class="section-label">
         <span>🔮 魔法模型 (Model)</span>
         <span class="tip-badge" id="modelTip">智能号池轮询</span>
       </div>
-      <select id="model"></select>
+      <select id="model">
+        <optgroup label="Cloudflare Workers AI 号池">
+          <option value="flux-2-klein-4b" selected>FLUX.2 Klein 4B · 最快 · 推荐</option>
+          <option value="flux-2-klein-9b">FLUX.2 Klein 9B · 更快更高清</option>
+          <option value="flux-2-dev">FLUX.2 Dev · 高质量精绘</option>
+          <option value="flux-1-schnell">FLUX.1 Schnell · 极速 4-8步</option>
+          <option value="moondream3.1-9B-A2B">Moondream 3.1 · 视觉看图问答</option>
+        </optgroup>
+      </select>
 
-      <!-- Aspect Ratio -->
+      <!-- Aspect Ratio (Pre-rendered chips) -->
       <div class="section-label">
         <span>📐 画幅比例 (Aspect Ratio)</span>
       </div>
-      <div class="chips" id="ratios"></div>
+      <div class="chips" id="ratios">
+        <button type="button" class="chip on" data-ratio="1:1">1:1</button>
+        <button type="button" class="chip" data-ratio="16:9">16:9</button>
+        <button type="button" class="chip" data-ratio="9:16">9:16</button>
+        <button type="button" class="chip" data-ratio="4:3">4:3</button>
+        <button type="button" class="chip" data-ratio="3:4">3:4</button>
+        <button type="button" class="chip" data-ratio="3:2">3:2</button>
+        <button type="button" class="chip" data-ratio="2:3">2:3</button>
+      </div>
 
-      <!-- Anime Style Presets -->
+      <!-- Anime Style Presets (Pre-rendered chips) -->
       <div class="section-label">
         <span>🎨 动漫风格预设 (Style)</span>
       </div>
-      <div class="chips" id="styles"></div>
+      <div class="chips" id="styles">
+        <button type="button" class="chip on" data-style="">🌟 默认原生</button>
+        <button type="button" class="chip" data-style="anime style, vibrant colors, clean lineart, Makoto Shinkai aesthetic, studio lighting, highly detailed, ">🌸 日系唯美</button>
+        <button type="button" class="chip" data-style="cyberpunk anime girl, glowing neon accents, holographic wings, futuristic city, highly detailed, ">✨ 赛博机娘</button>
+        <button type="button" class="chip" data-style="japanese digital painting, rich textures, expressive brushwork, soft glowing highlights, 8k, ">🎨 日系厚涂</button>
+        <button type="button" class="chip" data-style="traditional Chinese aesthetic, elegant flowing silk, ethereal anime style, misty atmosphere, ">🏯 唯美仙侠</button>
+        <button type="button" class="chip" data-style="chibi cute anime style, pastel colors, soft clay-like 3d rendering, adorable, soft lighting, ">🍡 治愈Q版</button>
+        <button type="button" class="chip" data-style="anime film still, 35mm photograph, retro nostalgic anime aesthetic, cinematic lighting, 4k, ">📸 胶片映画</button>
+        <button type="button" class="chip" data-style="dreamy watercolor anime illustration, soft bleeding pigments, delicate lineart, paper texture, ">💧 梦幻水彩</button>
+      </div>
 
       <!-- Reference Image -->
       <div class="section-label">
@@ -802,21 +836,26 @@ textarea:focus, input:focus, select:focus {
       <div class="thumbs" id="thumbs"></div>
 
       <!-- Advanced settings -->
-      <button class="adv-toggle" id="advBtn" type="button">⚙️ 展开高级咒文参数（种子 / 步数 / 访问密钥）</button>
-      <div class="adv" id="adv">
-        <div class="row">
-          <div>
-            <label style="font-size:11px;color:var(--text-muted);margin-bottom:4px;display:block;">随机种子 (Seed)</label>
-            <input id="seed" type="number" placeholder="留空为随机">
+      <details class="adv-details" id="advDetails">
+        <summary class="adv-toggle" id="advBtn">
+          <span>⚙️ 高级咒文参数（种子 / 步数 / 访问密钥）</span>
+          <span style="font-size:12px;opacity:0.75;">▼ 展开/收起</span>
+        </summary>
+        <div class="adv" id="adv">
+          <div class="row">
+            <div>
+              <label style="font-size:11px;color:var(--text-muted);margin-bottom:4px;display:block;">随机种子 (Seed)</label>
+              <input id="seed" type="number" placeholder="留空为随机">
+            </div>
+            <div>
+              <label style="font-size:11px;color:var(--text-muted);margin-bottom:4px;display:block;">渲染步数 (Schnell)</label>
+              <input id="steps" type="number" placeholder="默认 4-8">
+            </div>
           </div>
-          <div>
-            <label style="font-size:11px;color:var(--text-muted);margin-bottom:4px;display:block;">渲染步数 (Schnell)</label>
-            <input id="steps" type="number" placeholder="默认 4-8">
-          </div>
+          <label style="font-size:11px;color:var(--text-muted);margin-bottom:4px;display:block;">访问密钥 (ACCESS_KEY)</label>
+          <input id="apiKey" type="password" placeholder="未设置密码时请留空">
         </div>
-        <label style="font-size:11px;color:var(--text-muted);margin-bottom:4px;display:block;">访问密钥 (ACCESS_KEY)</label>
-        <input id="apiKey" type="password" placeholder="未设置密码时请留空">
-      </div>
+      </details>
 
       <!-- Submit button -->
       <button class="primary-btn" id="go" type="button">
@@ -855,116 +894,119 @@ textarea:focus, input:focus, select:focus {
 </div>
 
 <div class="toast-wrap" id="toasts"></div>
+
 <script>
 (function () {
-  var RATIOS = ["1:1","16:9","9:16","4:3","3:4","3:2","2:3"];
-  var STYLES = [
-    { id: "", name: "🌟 默认原生" },
-    { id: "anime style, vibrant colors, clean lineart, Makoto Shinkai aesthetic, studio lighting, highly detailed, ", name: "🌸 日系唯美" },
-    { id: "cyberpunk anime girl, glowing neon accents, holographic wings, futuristic city, highly detailed, ", name: "✨ 赛博机娘" },
-    { id: "japanese digital painting, rich textures, expressive brushwork, soft glowing highlights, 8k, ", name: "🎨 日系厚涂" },
-    { id: "traditional Chinese aesthetic, elegant flowing silk, ethereal anime style, misty atmosphere, ", name: "🏯 唯美仙侠" },
-    { id: "chibi cute anime style, pastel colors, soft clay-like 3d rendering, adorable, soft lighting, ", name: "🍡 治愈Q版" },
-    { id: "anime film still, 35mm photograph, retro nostalgic anime aesthetic, cinematic lighting, 4k, ", name: "📸 胶片映画" },
-    { id: "dreamy watercolor anime illustration, soft bleeding pigments, delicate lineart, paper texture, ", name: "💧 梦幻水彩" }
-  ];
-  
-  var HINTS = [
-    "🌸 唯美日系少女，樱花雨落，新海诚风天空，治愈系微风，精致五官",
-    "✨ 赛博朋克机娘，浮游光翼，霓虹发丝，机械装甲细节，夜景光晕",
-    "🌌 银河星海与奇幻空岛，漂浮的水晶鲸鱼，发光水母，梦幻童话",
-    "🏯 仙侠白发剑修少女，流云仙雾，红衣胜枫，手持青锋，唯美厚涂",
-    "🍡 可爱猫耳少女女仆装，捧着一杯草莓奶茶，Q版粘土质感，柔和打光",
-    "🌇 黄昏车站与放学后的少女，逆光发丝金边，电车与云海，电影感"
-  ];
-
   var state = { ratio: "1:1", style: "", images: [], history: [], timer: null };
 
   function $(id) { return document.getElementById(id); }
   
+  function getSafeStorage(k, def) {
+    try { return localStorage.getItem(k) || def; } catch (e) { return def; }
+  }
+  function setSafeStorage(k, v) {
+    try { localStorage.setItem(k, v); } catch (e) {}
+  }
+
   function toast(msg) {
+    var toasts = $("toasts");
+    if (!toasts) return;
     var el = document.createElement("div");
     el.className = "toast";
     el.innerHTML = "<span>✨</span> " + String(msg || "");
-    $("toasts").appendChild(el);
+    toasts.appendChild(el);
     setTimeout(function () { el.remove(); }, 3200);
   }
 
   function setStatus(msg, cls) {
     var el = $("status");
+    if (!el) return;
     el.className = "status " + (cls || "");
     el.textContent = String(msg || "");
   }
 
   function applyTheme(t) {
     document.documentElement.setAttribute("data-theme", t);
-    localStorage.setItem("fluxpool-theme", t);
+    setSafeStorage("fluxpool-theme", t);
   }
 
-  applyTheme(localStorage.getItem("fluxpool-theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
-  
-  $("themeBtn").onclick = function () {
-    var cur = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
-    applyTheme(cur);
-  };
+  try {
+    var savedTheme = getSafeStorage("fluxpool-theme", "");
+    if (!savedTheme && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+      savedTheme = "dark";
+    }
+    applyTheme(savedTheme || "light");
+  } catch (e) {}
 
-  $("apiKey").value = localStorage.getItem("fluxpool-key") || "";
-  $("apiKey").addEventListener("change", function () {
-    localStorage.setItem("fluxpool-key", $("apiKey").value.trim());
-  });
-
-  // Render Ratios
-  RATIOS.forEach(function (r) {
-    var b = document.createElement("button");
-    b.type = "button";
-    b.className = "chip" + (r === state.ratio ? " on" : "");
-    b.textContent = r;
-    b.onclick = function () {
-      state.ratio = r;
-      document.querySelectorAll("#ratios .chip").forEach(function (x) { x.classList.remove("on"); });
-      b.classList.add("on");
+  var themeBtn = $("themeBtn");
+  if (themeBtn) {
+    themeBtn.onclick = function () {
+      var cur = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+      applyTheme(cur);
     };
-    $("ratios").appendChild(b);
-  });
+  }
 
-  // Render Styles
-  STYLES.forEach(function (s, i) {
-    var b = document.createElement("button");
-    b.type = "button";
-    b.className = "chip" + (i === 0 ? " on" : "");
-    b.textContent = s.name;
-    b.onclick = function () {
-      state.style = s.id;
-      document.querySelectorAll("#styles .chip").forEach(function (x) { x.classList.remove("on"); });
-      b.classList.add("on");
+  var apiKeyEl = $("apiKey");
+  if (apiKeyEl) {
+    apiKeyEl.value = getSafeStorage("fluxpool-key", "");
+    apiKeyEl.addEventListener("change", function () {
+      setSafeStorage("fluxpool-key", apiKeyEl.value.trim());
+    });
+  }
+
+  // Bind Ratio Chips
+  var ratioChips = document.querySelectorAll("#ratios .chip");
+  ratioChips.forEach(function (btn) {
+    btn.onclick = function () {
+      ratioChips.forEach(function (x) { x.classList.remove("on"); });
+      btn.classList.add("on");
+      state.ratio = btn.getAttribute("data-ratio") || "1:1";
     };
-    $("styles").appendChild(b);
   });
 
-  // Render Hints
-  HINTS.forEach(function (h) {
-    var b = document.createElement("button");
-    b.type = "button";
-    b.className = "hint";
-    b.textContent = h;
-    b.onclick = function () { $("prompt").value = h; };
-    $("hints").appendChild(b);
+  // Bind Style Chips
+  var styleChips = document.querySelectorAll("#styles .chip");
+  styleChips.forEach(function (btn) {
+    btn.onclick = function () {
+      styleChips.forEach(function (x) { x.classList.remove("on"); });
+      btn.classList.add("on");
+      state.style = btn.getAttribute("data-style") || "";
+    };
   });
 
-  $("advBtn").onclick = function () { $("adv").classList.toggle("on"); };
+  // Bind Hint Chips
+  var hintChips = document.querySelectorAll("#hints .hint");
+  hintChips.forEach(function (btn) {
+    btn.onclick = function () {
+      var p = $("prompt");
+      if (p) p.value = btn.getAttribute("data-prompt") || "";
+    };
+  });
+
+  // Bind Advanced Toggle
+  var advBtn = $("advBtn");
+  var advBox = $("adv");
+  if (advBtn && advBox) {
+    advBtn.onclick = function () {
+      advBox.classList.toggle("on");
+      advBtn.textContent = advBox.classList.contains("on") ? "⚙️ 收起高级咒文参数" : "⚙️ 展开高级咒文参数（种子 / 步数 / 访问密钥）";
+    };
+  }
 
   // Dropzone handling
   var drop = $("drop");
-  drop.onclick = function () { $("file").click(); };
-  drop.ondragover = function (e) { e.preventDefault(); drop.classList.add("drag"); };
-  drop.ondragleave = function () { drop.classList.remove("drag"); };
-  drop.ondrop = function (e) {
-    e.preventDefault();
-    drop.classList.remove("drag");
-    addFiles(e.dataTransfer.files);
-  };
-
-  $("file").onchange = function () { addFiles($("file").files); $("file").value = ""; };
+  var fileInput = $("file");
+  if (drop && fileInput) {
+    drop.onclick = function () { fileInput.click(); };
+    drop.ondragover = function (e) { e.preventDefault(); drop.classList.add("drag"); };
+    drop.ondragleave = function () { drop.classList.remove("drag"); };
+    drop.ondrop = function (e) {
+      e.preventDefault();
+      drop.classList.remove("drag");
+      addFiles(e.dataTransfer.files);
+    };
+    fileInput.onchange = function () { addFiles(fileInput.files); fileInput.value = ""; };
+  }
 
   function addFiles(files) {
     Array.from(files || []).forEach(function (f) {
@@ -979,7 +1021,9 @@ textarea:focus, input:focus, select:focus {
   }
 
   function renderThumbs() {
-    $("thumbs").innerHTML = "";
+    var thumbs = $("thumbs");
+    if (!thumbs) return;
+    thumbs.innerHTML = "";
     state.images.forEach(function (src, i) {
       var wrap = document.createElement("div");
       wrap.className = "t";
@@ -988,13 +1032,13 @@ textarea:focus, input:focus, select:focus {
         state.images.splice(i, 1);
         renderThumbs();
       };
-      $("thumbs").appendChild(wrap);
+      thumbs.appendChild(wrap);
     });
   }
 
   function headers() {
     var h = { "Content-Type": "application/json" };
-    var key = $("apiKey").value.trim();
+    var key = apiKeyEl ? apiKeyEl.value.trim() : "";
     if (key) h.Authorization = "Bearer " + key;
     return h;
   }
@@ -1011,66 +1055,73 @@ textarea:focus, input:focus, select:focus {
   async function loadHealth() {
     try {
       var h = await api("/api/health");
-      var backend = h.backend === "upstash" ? "Upstash Redis" : (h.backend === "d1" ? "Cloudflare D1" : "本地缓存");
-      $("health").innerHTML =
-        "<span class="pill"><span class="pill-dot"></span> 状态库 <b>" + backend + "</b></span>" +
-        "<span class="pill">🌸 可用号池 <b>" + h.available + "</b> / " + h.total + "</span>" +
-        "<span class="pill">⚡ 今日神经元耗尽 <b>" + h.neurons_exhausted + "</b></span>" +
-        "<span class="pill">🛑 停用 <b>" + h.disabled + "</b></span>" +
-        "<span class="pill">🎯 轮询指针 <b>#" + h.cursor + "</b></span>";
-    } catch (e) {
-      $("health").innerHTML = "<span class="pill">🌸 号池状态监控中…</span>";
-    }
+      var backend = h.backend === "upstash" ? "Upstash Redis" : (h.backend === "d1" ? "Cloudflare D1" : "本地内存");
+      var healthEl = $("health");
+      if (healthEl) {
+        healthEl.innerHTML =
+          "<span class="pill"><span class="pill-dot"></span> 状态库 <b>" + backend + "</b></span>" +
+          "<span class="pill">🌸 可用号池 <b>" + h.available + "</b> / " + h.total + "</span>" +
+          "<span class="pill">⚡ 今日神经元耗尽 <b>" + h.neurons_exhausted + "</b></span>" +
+          "<span class="pill">🛑 停用 <b>" + h.disabled + "</b></span>" +
+          "<span class="pill">🎯 轮询指针 <b>#" + h.cursor + "</b></span>";
+      }
+    } catch (e) {}
   }
 
-  $("healthBtn").onclick = loadHealth;
+  var healthBtn = $("healthBtn");
+  if (healthBtn) healthBtn.onclick = loadHealth;
   loadHealth();
 
   async function loadModels() {
     var sel = $("model");
+    if (!sel) return;
     try {
       var data = await api("/api/models");
-      sel.innerHTML = "";
-      Object.keys(data.items || {}).forEach(function (g) {
-        var og = document.createElement("optgroup");
-        og.label = g;
-        (data.items[g] || []).forEach(function (m) {
-          var op = document.createElement("option");
-          op.value = m.id;
-          op.textContent = m.name + " · " + (m.hint || "");
-          og.appendChild(op);
+      if (data && data.items && Object.keys(data.items).length > 0) {
+        sel.innerHTML = "";
+        Object.keys(data.items).forEach(function (g) {
+          var og = document.createElement("optgroup");
+          og.label = g;
+          (data.items[g] || []).forEach(function (m) {
+            var op = document.createElement("option");
+            op.value = m.id;
+            op.textContent = m.name + (m.hint ? " · " + m.hint : "");
+            og.appendChild(op);
+          });
+          sel.appendChild(og);
         });
-        sel.appendChild(og);
-      });
-      sel.value = data.default || "flux-2-klein-4b";
-    } catch (e) {
-      sel.innerHTML = "<option value="flux-2-klein-4b">FLUX.2 Klein 4B · 最快推荐</option>";
-    }
+        if (data.default) sel.value = data.default;
+      }
+    } catch (e) {}
   }
 
   loadModels();
 
-  $("model").addEventListener("change", function () {
-    var m = $("model").value;
-    if (m === "moondream3.1-9B-A2B") {
-      $("go").innerHTML = "<span>👁️ 识别画面内容</span>";
-      setStatus("Moondream 是视觉模型，请上传参考图，提示词作为提问（例如：描述图中的少女衣服与背景）。");
-    } else {
-      $("go").innerHTML = "<span>✨ 召唤祈愿画卷</span>";
-      if (m === "flux-2-dev") setStatus("FLUX.2 Dev 细节极为精致（需30-90秒），请保持网页连接。");
-      else setStatus("快捷键：Ctrl + Enter。单号额度耗尽将自动轮询下一节点。");
-    }
-  });
+  var modelEl = $("model");
+  if (modelEl) {
+    modelEl.addEventListener("change", function () {
+      var m = modelEl.value;
+      var goBtn = $("go");
+      if (m === "moondream3.1-9B-A2B") {
+        if (goBtn) goBtn.innerHTML = "<span>👁️ 识别画面内容</span>";
+        setStatus("Moondream 是视觉模型，请上传参考图，提示词作为提问（例如：描述图中的二次元人物）。");
+      } else {
+        if (goBtn) goBtn.innerHTML = "<span>✨ 召唤祈愿画卷</span>";
+        if (m === "flux-2-dev") setStatus("FLUX.2 Dev 画质极佳（需30-90秒），请保持网页连接。");
+        else setStatus("快捷键：Ctrl + Enter。单号额度耗尽将自动轮询下一节点。");
+      }
+    });
+  }
 
+  // History load/save
   try {
-    var rawHist = localStorage.getItem("fluxpool-history") || "[]";
+    var rawHist = getSafeStorage("fluxpool-history", "[]");
     if (rawHist.length > 200000) {
-      localStorage.removeItem("fluxpool-history");
+      try { localStorage.removeItem("fluxpool-history"); } catch (e) {}
       rawHist = "[]";
     }
     state.history = JSON.parse(rawHist).filter(function (item) { return item && item.image; }).slice(0, 8);
   } catch (e) {
-    try { localStorage.removeItem("fluxpool-history"); } catch (e2) {}
     state.history = [];
   }
 
@@ -1085,30 +1136,32 @@ textarea:focus, input:focus, select:focus {
           ts: item.ts || Date.now()
         };
       });
-      localStorage.setItem("fluxpool-history", JSON.stringify(slim));
-    } catch (e) {
-      try { localStorage.removeItem("fluxpool-history"); } catch (e2) {}
-    }
+      setSafeStorage("fluxpool-history", JSON.stringify(slim));
+    } catch (e) {}
   }
 
   function renderHistory() {
-    $("history").innerHTML = "";
+    var histEl = $("history");
+    if (!histEl) return;
+    histEl.innerHTML = "";
     state.history.forEach(function (item) {
       if (!item.image) return;
       var el = document.createElement("div");
       el.className = "card";
       el.innerHTML = "<img src="" + item.image + ""><div class="c">" + (item.model || "") + " · " + (item.prompt || "") + "</div>";
       el.onclick = function () { showResult(item); };
-      $("history").appendChild(el);
+      histEl.appendChild(el);
     });
   }
 
   function showResult(item) {
-    $("canvas").innerHTML = "<div class="result"><img src="" + item.image + ""><div class="meta">" +
+    var canvas = $("canvas");
+    if (!canvas) return;
+    canvas.innerHTML = "<div class="result"><img src="" + item.image + ""><div class="meta">" +
       (item.model || "") + (item.account ? " · 节点 " + item.account : "") +
       (item.duration_sec ? " · 耗时 " + Number(item.duration_sec).toFixed(1) + "s" : "") +
       "</div><div class="actions"></div></div>";
-    var actions = $("canvas").querySelector(".actions");
+    var actions = canvas.querySelector(".actions");
     var a = document.createElement("a");
     a.className = "ghost-btn";
     a.innerHTML = "<span>⬇️ 保存原画</span>";
@@ -1198,7 +1251,8 @@ textarea:focus, input:focus, select:focus {
           if (data && data.job_id) jobId = data.job_id;
           if (ev === "status" || ev === "ping") {
             if (data && data.message) setStatus(data.message);
-            $("elapsed").textContent = ev === "ping" ? "✨ 绘制中 · 心跳保活中…" : (data && data.message) || "✨ 绘制中…";
+            var el = $("elapsed");
+            if (el) el.textContent = ev === "ping" ? "✨ 绘制中 · 心跳保活中…" : (data && data.message) || "✨ 绘制中…";
             return;
           }
           if (ev === "error") throw new Error(data.error || "生成失败");
@@ -1220,9 +1274,11 @@ textarea:focus, input:focus, select:focus {
   }
 
   async function generate() {
-    var prompt = $("prompt").value.trim();
+    var pEl = $("prompt");
+    var prompt = pEl ? pEl.value.trim() : "";
     if (!prompt) { setStatus("⚠️ 请先输入咒文提示词", "err"); return; }
     var go = $("go");
+    if (!go) return;
     go.disabled = true;
     var origBtnText = go.innerHTML;
     go.innerHTML = "<span>⏳ 正在召唤画卷…</span>";
@@ -1230,11 +1286,13 @@ textarea:focus, input:focus, select:focus {
     var started = Date.now();
     if (state.timer) clearInterval(state.timer);
     state.timer = setInterval(function () {
-      $("elapsed").textContent = ((Date.now() - started) / 1000).toFixed(1) + "s";
+      var el = $("elapsed");
+      if (el) el.textContent = ((Date.now() - started) / 1000).toFixed(1) + "s";
     }, 200);
 
     try {
-      if ($("model").value === "moondream3.1-9B-A2B") {
+      var m = modelEl ? modelEl.value : "flux-2-klein-4b";
+      if (m === "moondream3.1-9B-A2B") {
         if (!state.images.length) throw new Error("Moondream 必须先上传至少 1 张参考图");
         var vis = await api("/api/vision", {
           method: "POST",
@@ -1248,23 +1306,29 @@ textarea:focus, input:focus, select:focus {
           })
         });
         var text = vis.answer || vis.caption || JSON.stringify(vis.raw || vis, null, 2);
-        $("canvas").innerHTML = "<div class="result"><img src="" + state.images[0] + ""><div class="meta">Moondream · 节点 " + (vis.account || "") + "</div><div class="vision-text-box">" + text.replace(/</g, "&lt;") + "</div></div>";
+        var canvas = $("canvas");
+        if (canvas) {
+          canvas.innerHTML = "<div class="result"><img src="" + state.images[0] + ""><div class="meta">Moondream · 节点 " + (vis.account || "") + "</div><div class="vision-text-box">" + text.replace(/</g, "&lt;") + "</div></div>";
+        }
         setStatus("✅ 画面识别完成 · " + (vis.account || ""), "ok");
         toast("识别完成");
         loadHealth();
         return;
       }
 
+      var seedVal = $("seed") ? $("seed").value : "";
+      var stepsVal = $("steps") ? $("steps").value : "";
+
       var payload = {
         prompt: (state.style || "") + prompt,
-        model: $("model").value || "flux-2-klein-4b",
+        model: m || "flux-2-klein-4b",
         aspect_ratio: state.ratio
       };
-      if ($("seed").value) payload.seed = Number($("seed").value);
-      if ($("steps").value) payload.steps = Number($("steps").value);
+      if (seedVal) payload.seed = Number(seedVal);
+      if (stepsVal) payload.steps = Number(stepsVal);
       if (state.images.length) payload.images = state.images;
 
-      setStatus($("model").value === "flux-2-dev" ? "✨ FLUX.2 Dev 深度绘制中，流式连接已建立…" : "✨ 正在绘制二次元画卷…");
+      setStatus(m === "flux-2-dev" ? "✨ FLUX.2 Dev 深度绘制中，流式连接已建立…" : "✨ 正在绘制二次元画卷…");
       
       var data = await generateStream(payload);
       var image = data.image_base64 || data.image_url;
@@ -1298,15 +1362,22 @@ textarea:focus, input:focus, select:focus {
       loadHealth();
     } finally {
       clearInterval(state.timer);
-      go.disabled = false;
-      go.innerHTML = origBtnText;
+      if (go) {
+        go.disabled = false;
+        go.innerHTML = origBtnText;
+      }
     }
   }
 
-  $("go").onclick = generate;
-  $("prompt").addEventListener("keydown", function (e) {
-    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") generate();
-  });
+  var goBtn = $("go");
+  if (goBtn) goBtn.onclick = generate;
+
+  var promptInput = $("prompt");
+  if (promptInput) {
+    promptInput.addEventListener("keydown", function (e) {
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") generate();
+    });
+  }
 })();
 </script>
 </body>
