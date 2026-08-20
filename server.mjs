@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
+import { createAuth } from "./src/auth.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 8080);
@@ -23,6 +24,56 @@ const MODELS = [
 const ASPECT = { "1:1": [1024, 1024], "16:9": [1280, 720], "9:16": [720, 1280], "4:3": [1024, 768], "3:4": [768, 1024], "3:2": [1152, 768], "2:3": [768, 1152] };
 const MAX_TRIES = 24;
 const PAGE = fs.readFileSync(path.join(__dirname, "src", "index.html"), "utf8");
+const ADMIN_PAGE = `<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>焰池管理员</title>
+<style>
+body{font-family:sans-serif;max-width:920px;margin:24px auto;padding:0 16px;background:#f7f3ff;color:#231c36}
+h1{font-size:20px}label{display:block;margin:10px 0 4px;font-size:12px;color:#666}
+input{padding:8px 10px;border:1px solid #ddd;border-radius:8px;width:160px}
+button{margin-top:12px;padding:8px 14px;border:0;border-radius:8px;background:#a855f7;color:#fff;cursor:pointer}
+table{width:100%;border-collapse:collapse;margin-top:16px;background:#fff;border-radius:12px;overflow:hidden}
+th,td{padding:8px 10px;border-bottom:1px solid #eee;font-size:13px;text-align:left}
+.card{background:#fff;padding:16px;border-radius:12px;margin:16px 0}
+a{color:#7c3aed}
+</style></head><body>
+<h1>焰池管理员 · 优惠码</h1>
+<p><a href="/">返回生图</a></p>
+<div class="card">
+  <h3>生成优惠码</h3>
+  <label>每天可生成张数</label><input id="daily" type="number" value="20">
+  <label>可使用天数</label><input id="days" type="number" value="7">
+  <label>可被兑换次数</label><input id="max" type="number" value="1">
+  <label>备注</label><input id="note" type="text" placeholder="例如：内测用户">
+  <div><button id="go">生成</button></div>
+  <p id="out"></p>
+</div>
+<div class="card">
+  <h3>已生成</h3>
+  <table><thead><tr><th>码</th><th>每天张数</th><th>天数</th><th>已兑/上限</th><th>备注</th></tr></thead>
+  <tbody id="tb"></tbody></table>
+</div>
+<script>
+async function load(){
+  const r = await fetch('/api/admin/codes');
+  const d = await r.json();
+  document.getElementById('tb').innerHTML = (d.items||[]).map(c => '<tr><td>'+c.code+'</td><td>'+c.dailyLimit+'</td><td>'+c.days+'</td><td>'+c.usedCount+'/'+c.maxRedeems+'</td><td>'+(c.note||'')+'</td></tr>').join('');
+}
+document.getElementById('go').onclick = async function(){
+  const r = await fetch('/api/admin/codes', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
+    dailyLimit: Number(document.getElementById('daily').value),
+    days: Number(document.getElementById('days').value),
+    maxRedeems: Number(document.getElementById('max').value),
+    note: document.getElementById('note').value
+  })});
+  const d = await r.json();
+  document.getElementById('out').textContent = d.code ? ('已生成：'+d.code.code) : (d.error||'失败');
+  load();
+};
+load();
+</script>
+</body></html>`;
+
 
 if (!USE_UPSTASH) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -44,6 +95,8 @@ function pickPoolPath() {
   throw new Error("找不到 pool.json，请挂载 /data/pool.json 或设置 POOL_JSON");
 }
 const POOL = loadPool();
+const authApi = createAuth({ redisCmd, useUpstash: USE_UPSTASH, dataDir: DATA_DIR });
+
 
 async function redisCmd(args) {
   const res = await fetch(UPSTASH_URL, {
@@ -148,12 +201,37 @@ server.listen(PORT, HOST, () => {
   console.log("flux-pool listening on " + HOST + ":" + PORT + " accounts=" + POOL.accounts.length);
 });
 
+async function currentUser(req) {
+  try { return await authApi.getSessionUser(req); }
+  catch { return null; }
+}
+
+async function requireUser(req, res, needAdmin) {
+  if (!authApi.AUTH_ENABLED) {
+    if (ACCESS_KEY) {
+      const url = new URL(req.url, "http://localhost");
+      const got = bearer(req) || req.headers["x-api-key"] || url.searchParams.get("key") || "";
+      if (got !== ACCESS_KEY) {
+        json(res, { error: "需要 ACCESS_KEY 或 Linux Do 登录" }, 401);
+        return null;
+      }
+    }
+    return { id: "local", username: "local", admin: true, plan: { dailyLimit: 9999, usedToday: 0, expiresAt: Date.now() + 86400000 * 365 } };
+  }
+  const user = await currentUser(req);
+  if (!user) {
+    json(res, { error: "请先用 Linux Do 登录", login: "/auth/linuxdo/login" }, 401);
+    return null;
+  }
+  if (needAdmin && !user.admin) {
+    json(res, { error: "需要管理员 Linux Do 账号" }, 403);
+    return null;
+  }
+  return user;
+}
+
 function auth(req, url, res) {
-  if (!ACCESS_KEY) return true;
-  const got = bearer(req) || req.headers["x-api-key"] || url.searchParams.get("key") || "";
-  if (got === ACCESS_KEY) return true;
-  json(res, { error: "需要 ACCESS_KEY" }, 401);
-  return false;
+  return true;
 }
 function bearer(req) {
   const h = String(req.headers.authorization || "");
@@ -187,7 +265,7 @@ async function readBody(req) {
   return JSON.parse(raw);
 }
 
-async function streamGenerate(req, res, body) {
+async function streamGenerate(req, res, body, user) {
   res.writeHead(200, {
     "Content-Type": "text/event-stream; charset=utf-8",
     "Cache-Control": "no-cache, no-transform",
@@ -200,6 +278,15 @@ async function streamGenerate(req, res, body) {
   const sse = (event, data) => {
     try { res.write("event: " + event + "\ndata: " + JSON.stringify(data) + "\n\n"); } catch (_) {}
   };
+  if (user) {
+    try { await authApi.consumeQuota(user); }
+    catch (err) {
+      sse("error", { job_id: jobId, error: formatError(err) });
+      clearInterval(ping);
+      try { res.end(); } catch (_) {}
+      return;
+    }
+  }
   sse("status", { job_id: jobId, message: "开始出图，额度用尽会自动换号" });
   const ping = setInterval(() => {
     sse("ping", { job_id: jobId, t: Date.now() });
