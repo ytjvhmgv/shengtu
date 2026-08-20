@@ -1041,11 +1041,11 @@ details[open] summary.adv-toggle { border-color:var(--primary); color:var(--prim
       var healthEl = $("health");
       if (healthEl) {
         healthEl.innerHTML =
-          "<span class="pill"><span class="pill-dot"></span> 状态库 <b>" + backend + "</b></span>" +
-          "<span class="pill">🌸 可用号池 <b>" + h.available + "</b> / " + h.total + "</span>" +
-          "<span class="pill">⚡ 今日神经元耗尽 <b>" + h.neurons_exhausted + "</b></span>" +
-          "<span class="pill">🛑 停用 <b>" + h.disabled + "</b></span>" +
-          "<span class="pill">🎯 轮询指针 <b>#" + h.cursor + "</b></span>";
+          '<span class="pill"><span class="pill-dot"></span> 状态库 <b>' + backend + '</b></span>' +
+          '<span class="pill">可用号池 <b>' + h.available + '</b> / ' + h.total + '</span>' +
+          '<span class="pill">今日神经元耗尽 <b>' + h.neurons_exhausted + '</b></span>' +
+          '<span class="pill">停用 <b>' + h.disabled + '</b></span>' +
+          '<span class="pill">轮询指针 <b>#' + h.cursor + '</b></span>';
       }
     } catch (e) {}
   }
@@ -1142,7 +1142,7 @@ details[open] summary.adv-toggle { border-color:var(--primary); color:var(--prim
     canvas.innerHTML = "<div class=\"result\"><img src=\"" + item.image + "\"><div class=\"meta\">" +
       (item.model || "") + (item.account ? " · 节点 " + item.account : "") +
       (item.duration_sec ? " · 耗时 " + Number(item.duration_sec).toFixed(1) + "s" : "") +
-      "</div><div class="actions"></div></div>";
+      "</div><div class=\"actions\"></div></div>";
     var actions = canvas.querySelector(".actions");
     var a = document.createElement("a");
     a.className = "ghost-btn";
@@ -1214,22 +1214,18 @@ details[open] summary.adv-toggle { border-color:var(--primary); color:var(--prim
         var chunk = await reader.read();
         if (chunk.done) break;
         buf += dec.decode(chunk.value, { stream: true });
-        var parts = buf.split("
-
-");
+        var parts = buf.split("\n\n");
         buf = parts.pop();
         parts.forEach(function (block) {
           var ev = "message";
           var dataLines = [];
-          block.split("
-").forEach(function (line) {
+          block.split("\n").forEach(function (line) {
             if (line.indexOf("event:") === 0) ev = line.slice(6).trim();
             else if (line.indexOf("data:") === 0) dataLines.push(line.slice(5).trim());
           });
           if (!dataLines.length) return;
           var data;
-          try { data = JSON.parse(dataLines.join("
-")); } catch (e) { return; }
+          try { data = JSON.parse(dataLines.join("\n")); } catch (e) { return; }
           if (data && data.job_id) jobId = data.job_id;
           if (ev === "status" || ev === "ping") {
             if (data && data.message) setStatus(data.message);
