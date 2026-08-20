@@ -1,0 +1,13 @@
+name = "cf-flux-pool"
+main = "worker.js"
+compatibility_date = "2025-10-08"
+
+[vars]
+DEFAULT_MODEL = "flux-2-klein-4b"
+
+# Dashboard 绑定 D1 后，变量名必须是 DB。
+# wrangler 部署时取消下面注释并填入 database_id：
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "cf-flux-pool"
+# database_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
