@@ -230,7 +230,7 @@ button { cursor: pointer; border: none; }
   box-shadow: var(--shadow);
   backdrop-filter: blur(20px);
   position: relative;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .panel {
@@ -439,19 +439,29 @@ textarea:focus, input:focus, select:focus {
 }
 
 .adv {
-  display: none;
-  margin-top: 10px;
-  padding: 12px;
+  display: block;
+  margin-top: 8px;
+  padding: 14px;
   border-radius: 14px;
   background: rgba(168, 85, 247, 0.04);
   border: 1px solid var(--card-border);
 }
 
-.adv.on {
-  display: block;
-  animation: fadeIn 0.25s ease;
-}
 
+
+details.adv-details { width:100%; margin-top:14px; }
+summary.adv-toggle { list-style:none; cursor:pointer; display:flex; align-items:center; justify-content:space-between; width:100%; background:rgba(168,85,247,.07); border:1.5px dashed var(--card-border); color:var(--text); border-radius:14px; padding:11px 16px; font-size:13px; font-weight:700; user-select:none; }
+summary.adv-toggle::-webkit-details-marker { display:none; }
+details[open] summary.adv-toggle { border-color:var(--primary); color:var(--primary); background:rgba(168,85,247,.12); }
+.chips label.chip { cursor:pointer; display:inline-flex; align-items:center; }
+.chips input[type="radio"] { position:absolute; opacity:0; width:0; height:0; }
+.chips label.chip:has(input:checked) {
+  background: var(--primary-gradient);
+  border-color: transparent;
+  color: #ffffff;
+  font-weight: 700;
+  box-shadow: 0 4px 14px var(--primary-glow);
+}
 .row {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -476,7 +486,7 @@ textarea:focus, input:focus, select:focus {
   gap: 8px;
   transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .primary-btn:hover:not(:disabled) {
@@ -663,7 +673,7 @@ textarea:focus, input:focus, select:focus {
 .card {
   border: 1px solid var(--card-border);
   border-radius: 16px;
-  overflow: hidden;
+  overflow: visible;
   background: var(--card-solid);
   cursor: pointer;
   transition: all 0.22s ease;
@@ -689,7 +699,7 @@ textarea:focus, input:focus, select:focus {
   font-size: 11px;
   color: var(--text-muted);
   white-space: nowrap;
-  overflow: hidden;
+  overflow: visible;
   text-overflow: ellipsis;
   background: var(--card-solid);
 }
@@ -799,13 +809,13 @@ textarea:focus, input:focus, select:focus {
         <span>📐 画幅比例 (Aspect Ratio)</span>
       </div>
       <div class="chips" id="ratios">
-        <button type="button" class="chip on" data-ratio="1:1">1:1</button>
-        <button type="button" class="chip" data-ratio="16:9">16:9</button>
-        <button type="button" class="chip" data-ratio="9:16">9:16</button>
-        <button type="button" class="chip" data-ratio="4:3">4:3</button>
-        <button type="button" class="chip" data-ratio="3:4">3:4</button>
-        <button type="button" class="chip" data-ratio="3:2">3:2</button>
-        <button type="button" class="chip" data-ratio="2:3">2:3</button>
+        <label class="chip"><input type="radio" name="ratio" value="1:1" checked>1:1</label>
+        <label class="chip"><input type="radio" name="ratio" value="16:9">16:9</label>
+        <label class="chip"><input type="radio" name="ratio" value="9:16">9:16</label>
+        <label class="chip"><input type="radio" name="ratio" value="4:3">4:3</label>
+        <label class="chip"><input type="radio" name="ratio" value="3:4">3:4</label>
+        <label class="chip"><input type="radio" name="ratio" value="3:2">3:2</label>
+        <label class="chip"><input type="radio" name="ratio" value="2:3">2:3</label>
       </div>
 
       <!-- Anime Style Presets (Pre-rendered chips) -->
@@ -813,14 +823,14 @@ textarea:focus, input:focus, select:focus {
         <span>🎨 动漫风格预设 (Style)</span>
       </div>
       <div class="chips" id="styles">
-        <button type="button" class="chip on" data-style="">🌟 默认原生</button>
-        <button type="button" class="chip" data-style="anime style, vibrant colors, clean lineart, Makoto Shinkai aesthetic, studio lighting, highly detailed, ">🌸 日系唯美</button>
-        <button type="button" class="chip" data-style="cyberpunk anime girl, glowing neon accents, holographic wings, futuristic city, highly detailed, ">✨ 赛博机娘</button>
-        <button type="button" class="chip" data-style="japanese digital painting, rich textures, expressive brushwork, soft glowing highlights, 8k, ">🎨 日系厚涂</button>
-        <button type="button" class="chip" data-style="traditional Chinese aesthetic, elegant flowing silk, ethereal anime style, misty atmosphere, ">🏯 唯美仙侠</button>
-        <button type="button" class="chip" data-style="chibi cute anime style, pastel colors, soft clay-like 3d rendering, adorable, soft lighting, ">🍡 治愈Q版</button>
-        <button type="button" class="chip" data-style="anime film still, 35mm photograph, retro nostalgic anime aesthetic, cinematic lighting, 4k, ">📸 胶片映画</button>
-        <button type="button" class="chip" data-style="dreamy watercolor anime illustration, soft bleeding pigments, delicate lineart, paper texture, ">💧 梦幻水彩</button>
+        <label class="chip"><input type="radio" name="style" value="" checked>默认原生</label>
+        <label class="chip"><input type="radio" name="style" value="anime style, vibrant colors, clean lineart, Makoto Shinkai aesthetic, studio lighting, highly detailed, ">日系唯美</label>
+        <label class="chip"><input type="radio" name="style" value="cyberpunk anime girl, glowing neon accents, holographic wings, futuristic city, highly detailed, ">赛博机娘</label>
+        <label class="chip"><input type="radio" name="style" value="japanese digital painting, rich textures, expressive brushwork, soft glowing highlights, 8k, ">日系厚涂</label>
+        <label class="chip"><input type="radio" name="style" value="traditional Chinese aesthetic, elegant flowing silk, ethereal anime style, misty atmosphere, ">唯美仙侠</label>
+        <label class="chip"><input type="radio" name="style" value="chibi cute anime style, pastel colors, soft clay-like 3d rendering, adorable, soft lighting, ">治愈Q版</label>
+        <label class="chip"><input type="radio" name="style" value="anime film still, 35mm photograph, retro nostalgic anime aesthetic, cinematic lighting, 4k, ">胶片映画</label>
+        <label class="chip"><input type="radio" name="style" value="dreamy watercolor anime illustration, soft bleeding pigments, delicate lineart, paper texture, ">梦幻水彩</label>
       </div>
 
       <!-- Reference Image -->
@@ -954,26 +964,7 @@ textarea:focus, input:focus, select:focus {
     });
   }
 
-  // Bind Ratio Chips
-  var ratioChips = document.querySelectorAll("#ratios .chip");
-  ratioChips.forEach(function (btn) {
-    btn.onclick = function () {
-      ratioChips.forEach(function (x) { x.classList.remove("on"); });
-      btn.classList.add("on");
-      state.ratio = btn.getAttribute("data-ratio") || "1:1";
-    };
-  });
-
-  // Bind Style Chips
-  var styleChips = document.querySelectorAll("#styles .chip");
-  styleChips.forEach(function (btn) {
-    btn.onclick = function () {
-      styleChips.forEach(function (x) { x.classList.remove("on"); });
-      btn.classList.add("on");
-      state.style = btn.getAttribute("data-style") || "";
-    };
-  });
-
+  // Native radio chips; only bind hints
   // Bind Hint Chips
   var hintChips = document.querySelectorAll("#hints .hint");
   hintChips.forEach(function (btn) {
@@ -983,16 +974,7 @@ textarea:focus, input:focus, select:focus {
     };
   });
 
-  // Bind Advanced Toggle
-  var advBtn = $("advBtn");
-  var advBox = $("adv");
-  if (advBtn && advBox) {
-    advBtn.onclick = function () {
-      advBox.classList.toggle("on");
-      advBtn.textContent = advBox.classList.contains("on") ? "⚙️ 收起高级咒文参数" : "⚙️ 展开高级咒文参数（种子 / 步数 / 访问密钥）";
-    };
-  }
-
+  // Native <details> for advanced params
   // Dropzone handling
   var drop = $("drop");
   var fileInput = $("file");
@@ -1320,9 +1302,9 @@ textarea:focus, input:focus, select:focus {
       var stepsVal = $("steps") ? $("steps").value : "";
 
       var payload = {
-        prompt: (state.style || "") + prompt,
+        prompt: ((document.querySelector('#styles input[name="style"]:checked') || {}).value || state.style || "") + prompt,
         model: m || "flux-2-klein-4b",
-        aspect_ratio: state.ratio
+        aspect_ratio: (document.querySelector('#ratios input[name="ratio"]:checked') || {}).value || state.ratio || "1:1"
       };
       if (seedVal) payload.seed = Number(seedVal);
       if (stepsVal) payload.steps = Number(stepsVal);
