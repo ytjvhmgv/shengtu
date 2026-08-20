@@ -897,6 +897,10 @@ select, input[type=text], input[type=number], input[type=password] {
     <div class="nav-actions">
       <button class="ghost-btn" id="themeBtn" type="button" onclick="var d=document.documentElement; var n=d.getAttribute('data-theme')==='dark'?'light':'dark'; d.setAttribute('data-theme', n); try{localStorage.setItem('fluxpool-theme', n)}catch(e){}">🌓 切换主题</button>
       <button class="ghost-btn" id="healthBtn" type="button" onclick="if(window.__fluxHealth){window.__fluxHealth();}">💫 刷新号池</button>
+      <a class="ghost-btn" id="loginBtn" href="/auth/linuxdo/login">🐧 Linux Do 登录</a>
+      <span id="userPill" class="pill" style="display:none"></span>
+      <a class="ghost-btn" id="adminBtn" href="/admin" style="display:none">🛠 管理优惠码</a>
+      <button class="ghost-btn" id="logoutBtn" type="button" style="display:none">退出</button>
     </div>
   </header>
 
@@ -912,6 +916,14 @@ select, input[type=text], input[type=number], input[type=password] {
     <!-- Left Panel -->
     <aside class="panel">
       <div class="panel-scroll">
+      <div id="redeemBox" style="display:none;margin-bottom:8px;padding:10px;border:1px dashed var(--card-border);border-radius:12px;background:rgba(168,85,247,.05)">
+        <div class="section-label" style="margin-top:0"><span>🎫 兑换优惠码</span></div>
+        <div style="display:flex;gap:8px">
+          <input id="redeemCode" type="text" placeholder="例如 FP-XXXX" style="flex:1">
+          <button class="ghost-btn" id="redeemBtn" type="button">兑换</button>
+        </div>
+        <div id="planInfo" class="status" style="margin-top:6px">登录后兑换优惠码，才能按额度生图。</div>
+      </div>
 <!-- Prompt -->
       <div class="section-label">
         <span>✦ 咒文提示词 (Prompt)</span>
@@ -1195,6 +1207,56 @@ select, input[type=text], input[type=number], input[type=password] {
   var healthBtn = $("healthBtn");
   if (healthBtn) healthBtn.onclick = loadHealth;
   loadHealth();
+  async function loadMe() {
+    try {
+      var me = await api("/api/me");
+      var loginBtn = $("loginBtn");
+      var userPill = $("userPill");
+      var adminBtn = $("adminBtn");
+      var logoutBtn = $("logoutBtn");
+      var redeemBox = $("redeemBox");
+      var planInfo = $("planInfo");
+      if (!me.authEnabled) {
+        if (loginBtn) loginBtn.style.display = "none";
+        if (redeemBox) redeemBox.style.display = "none";
+        return;
+      }
+      if (redeemBox) redeemBox.style.display = "block";
+      if (!me.user) {
+        if (loginBtn) loginBtn.style.display = "";
+        if (userPill) userPill.style.display = "none";
+        if (adminBtn) adminBtn.style.display = "none";
+        if (logoutBtn) logoutBtn.style.display = "none";
+        if (planInfo) planInfo.textContent = "请先用 Linux Do 登录，再兑换优惠码。";
+        return;
+      }
+      if (loginBtn) loginBtn.style.display = "none";
+      if (userPill) { userPill.style.display = ""; userPill.textContent = "@" + me.user.username + (me.user.admin ? " · 管理员" : ""); }
+      if (logoutBtn) logoutBtn.style.display = "";
+      if (adminBtn) adminBtn.style.display = me.user.admin ? "" : "none";
+      if (planInfo) {
+        if (me.user.admin) planInfo.textContent = "管理员账号，不限制生图张数。";
+        else if (!me.user.plan) planInfo.textContent = "尚未兑换优惠码，无法生图。";
+        else if (me.user.plan.expired) planInfo.textContent = "优惠码已过期。";
+        else planInfo.textContent = "今日剩余 " + me.user.plan.remainingToday + " / " + me.user.plan.dailyLimit + " 张 · 还可使用 " + me.user.plan.daysLeft + " 天";
+      }
+    } catch (e) {}
+  }
+  var redeemBtn = $("redeemBtn");
+  if (redeemBtn) redeemBtn.onclick = async function () {
+    var input = $("redeemCode");
+    try {
+      await api("/api/redeem", { method: "POST", body: JSON.stringify({ code: input ? input.value : "" }) });
+      toast("兑换成功");
+      loadMe();
+    } catch (e) { toast(e.message || "兑换失败"); }
+  };
+  var logoutBtn2 = $("logoutBtn");
+  if (logoutBtn2) logoutBtn2.onclick = async function () {
+    await fetch("/auth/logout", { method: "POST" });
+    location.reload();
+  };
+  loadMe();
 
   async function loadModels() {
     var sel = $("model");
