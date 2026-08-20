@@ -1,0 +1,8 @@
+pool.json
+worker.js
+data/
+.wrangler/
+node_modules/
+.dev.vars
+.env
+*.py
