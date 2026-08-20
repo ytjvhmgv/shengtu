@@ -152,29 +152,114 @@ const server = http.createServer(async (req, res) => {
       return json(res, { default: process.env.DEFAULT_MODEL || "flux-2-klein-4b", items: { "Cloudflare Workers AI 号池": MODELS.map((m) => ({ id: m.id, name: m.name, hint: m.hint, capabilities: m.caps })) } });
     }
     if (req.method === "GET" && p === "/api/health") return json(res, await readHealth());
+    if (req.method === "GET" && p === "/auth/linuxdo/login") {
+      if (!authApi.AUTH_ENABLED) return json(res, { error: "未配置 LINUX_DO_CLIENT_ID / LINUX_DO_CLIENT_SECRET" }, 500);
+      const state = randomUUID();
+      res.writeHead(302, {
+        Location: authApi.loginUrl(state),
+        "Set-Cookie": authApi.cookieHeader("fp_oauth", state, 600),
+      });
+      return res.end();
+    }
+    if (req.method === "GET" && p === "/auth/linuxdo/callback") {
+      try {
+        const cookies = authApi.parseCookies(req);
+        const code = url.searchParams.get("code");
+        const state = url.searchParams.get("state");
+        if (!code) throw new Error("缺少 code");
+        if (cookies.fp_oauth && state && cookies.fp_oauth !== state) throw new Error("state 不匹配");
+        const info = await authApi.exchangeCode(code);
+        const user = await authApi.upsertUser(info);
+        const sid = authApi.makeSid(user);
+        res.writeHead(302, {
+          Location: "/",
+          "Set-Cookie": [
+            authApi.cookieHeader("fp_sid", sid, 30 * 86400),
+            authApi.cookieHeader("fp_oauth", "", 0),
+          ],
+        });
+        return res.end();
+      } catch (err) {
+        return json(res, { error: formatError(err) }, 400);
+      }
+    }
+    if (req.method === "POST" && p === "/auth/logout") {
+      res.writeHead(200, {
+        "Content-Type": "application/json; charset=utf-8",
+        "Set-Cookie": authApi.cookieHeader("fp_sid", "", 0),
+      });
+      return res.end(JSON.stringify({ ok: true }));
+    }
+    if (req.method === "GET" && p === "/api/me") {
+      const user = await currentUser(req);
+      return json(res, { authEnabled: authApi.AUTH_ENABLED, user: authApi.publicUser(user) });
+    }
+    if (req.method === "POST" && p === "/api/redeem") {
+      const user = await requireUser(req, res, false);
+      if (!user) return;
+      const body = await readBody(req);
+      try { return json(res, { ok: true, user: await authApi.redeem(user, body.code) }); }
+      catch (err) { return json(res, { error: formatError(err) }, err.status || 400); }
+    }
+    if (req.method === "GET" && p === "/api/admin/codes") {
+      const user = await requireUser(req, res, true);
+      if (!user) return;
+      const codes = await authApi.listPrefix("code");
+      codes.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      return json(res, { items: codes });
+    }
+    if (req.method === "POST" && p === "/api/admin/codes") {
+      const user = await requireUser(req, res, true);
+      if (!user) return;
+      const body = await readBody(req);
+      try { return json(res, { ok: true, code: await authApi.createCode(user, body) }); }
+      catch (err) { return json(res, { error: formatError(err) }, err.status || 400); }
+    }
+    if (req.method === "GET" && p === "/api/admin/users") {
+      const user = await requireUser(req, res, true);
+      if (!user) return;
+      return json(res, { items: (await authApi.listPrefix("user")).map((u) => authApi.publicUser(u)) });
+    }
+    if (req.method === "GET" && p === "/admin") {
+      const user = await requireUser(req, res, true);
+      if (!user) return;
+      return html(res, ADMIN_PAGE);
+    }
     if (req.method === "GET" && p === "/api/accounts") {
-      if (!auth(req, url, res)) return;
+      const user = await requireUser(req, res, true);
+      if (!user) return;
       return json(res, await readAccountStatus());
     }
     if (req.method === "GET" && p.startsWith("/api/jobs/")) {
-      if (!auth(req, url, res)) return;
+      const user = await requireUser(req, res, false);
+      if (!user) return;
       const id = p.slice("/api/jobs/".length).split("/")[0];
       const job = await readJob(id);
       return job ? json(res, job) : json(res, { error: "任务不存在" }, 404);
     }
     if (req.method === "POST" && p === "/api/vision") {
-      if (!auth(req, url, res)) return;
+      const user = await requireUser(req, res, false);
+      if (!user) return;
+      try { await authApi.consumeQuota(user); }
+      catch (err) { return json(res, { error: formatError(err) }, err.status || 403); }
       const body = await readBody(req);
       try { return json(res, await vision(body)); }
-      catch (err) { return json(res, { error: formatError(err) }, err.status || 500); }
+      catch (err) {
+        await authApi.refundQuota(user);
+        return json(res, { error: formatError(err) }, err.status || 500);
+      }
     }
     if (req.method === "POST" && p === "/api/generate/stream") {
-      if (!auth(req, url, res)) return;
+      const user = await requireUser(req, res, false);
+      if (!user) return;
       const body = await readBody(req);
-      return streamGenerate(req, res, body);
+      return streamGenerate(req, res, body, user);
     }
     if (req.method === "POST" && (p === "/api/generate" || p === "/api/generate/async" || p === "/v1/images/generations" || p === "/v1/images/edits")) {
-      if (!auth(req, url, res)) return;
+      const user = await requireUser(req, res, false);
+      if (!user) return;
+      try { await authApi.consumeQuota(user); }
+      catch (err) { return json(res, { error: formatError(err) }, err.status || 403); }
       const body = await readBody(req);
       if (p === "/v1/images/edits") body.images = collectImages(body);
       try {
@@ -185,6 +270,7 @@ const server = http.createServer(async (req, res) => {
         }
         return json(res, { status: "completed", ...result });
       } catch (err) {
+        await authApi.refundQuota(user);
         return json(res, { status: "error", error: formatError(err) }, err.status || 500);
       }
     }
@@ -208,14 +294,6 @@ async function currentUser(req) {
 
 async function requireUser(req, res, needAdmin) {
   if (!authApi.AUTH_ENABLED) {
-    if (ACCESS_KEY) {
-      const url = new URL(req.url, "http://localhost");
-      const got = bearer(req) || req.headers["x-api-key"] || url.searchParams.get("key") || "";
-      if (got !== ACCESS_KEY) {
-        json(res, { error: "需要 ACCESS_KEY 或 Linux Do 登录" }, 401);
-        return null;
-      }
-    }
     return { id: "local", username: "local", admin: true, plan: { dailyLimit: 9999, usedToday: 0, expiresAt: Date.now() + 86400000 * 365 } };
   }
   const user = await currentUser(req);
