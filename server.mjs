@@ -18,6 +18,7 @@ const MODELS = [
   { id: "flux-2-klein-9b", name: "FLUX.2 Klein 9B", hint: "更快更高清", cf: "@cf/black-forest-labs/flux-2-klein-9b", mode: "multipart", caps: ["txt2img", "img2img"] },
   { id: "flux-2-dev", name: "FLUX.2 Dev", hint: "高质量", cf: "@cf/black-forest-labs/flux-2-dev", mode: "multipart", caps: ["txt2img", "img2img"] },
   { id: "flux-1-schnell", name: "FLUX.1 Schnell", hint: "老款极速 JSON", cf: "@cf/black-forest-labs/flux-1-schnell", mode: "json", caps: ["txt2img"] },
+  { id: "moondream3.1-9B-A2B", name: "Moondream 3.1", hint: "看图问答 · 不能生图", cf: "@cf/moondream/moondream3.1-9B-A2B", mode: "json", caps: ["vision"] },
 ];
 const ASPECT = { "1:1": [1024, 1024], "16:9": [1280, 720], "9:16": [720, 1280], "4:3": [1024, 768], "3:4": [768, 1024], "3:2": [1152, 768], "2:3": [768, 1152] };
 const MAX_TRIES = 24;
@@ -107,6 +108,12 @@ const server = http.createServer(async (req, res) => {
       const id = p.slice("/api/jobs/".length).split("/")[0];
       const job = await readJob(id);
       return job ? json(res, job) : json(res, { error: "任务不存在" }, 404);
+    }
+    if (req.method === "POST" && p === "/api/vision") {
+      if (!auth(req, url, res)) return;
+      const body = await readBody(req);
+      try { return json(res, await vision(body)); }
+      catch (err) { return json(res, { error: formatError(err) }, err.status || 500); }
     }
     if (req.method === "POST" && p === "/api/generate/stream") {
       if (!auth(req, url, res)) return;
@@ -243,11 +250,82 @@ async function readJob(id) {
   catch { return null; }
 }
 
+async function vision(body) {
+  const model = resolveModel("moondream3.1-9B-A2B");
+  const images = await normalizeImages(collectImages(body));
+  if (!images.length) throw new PoolError("Moondream 是看图模型，请先上传参考图", "bad_input", 400);
+  const img = images[0];
+  const dataUri = toDataUri(img.bytes, img.mime);
+  const task = String(body.task || "query");
+  const question = String(body.question || body.prompt || "What's in this image?").trim();
+  const target = String(body.target || body.prompt || "object").trim();
+  const candidates = await pickAccounts(MAX_TRIES);
+  if (!candidates.length) throw new PoolError("号池里暂时没有可用账号", "neurons", 429);
+  let lastErr = null;
+  for (let i = 0; i < candidates.length; i++) {
+    const acc = candidates[i];
+    try {
+      const out = await runVision(acc, { task, image: dataUri, question, target });
+      await report({ account_id: acc.account_id, name: acc.name, ok: true });
+      return { model: model.id, account: acc.name, task, ...out, backend: USE_UPSTASH ? "upstash" : "file" };
+    } catch (err) {
+      lastErr = err;
+      const kind = err.kind || "other";
+      await report({ account_id: acc.account_id, name: acc.name, ok: false, kind, error: formatError(err) });
+      if (kind === "policy" || isFatalInput(kind, formatError(err))) {
+        if (kind === "policy") throw new PoolError("内容审核拦截，换一张图或换个问题。", "policy", 400);
+        break;
+      }
+    }
+  }
+  throw new PoolError("看图失败：" + formatError(lastErr), (lastErr && lastErr.kind) || "other", 502);
+}
+
+async function runVision(acc, opt) {
+  const url = "https://api.cloudflare.com/client/v4/accounts/" + acc.account_id + "/ai/run/@cf/moondream/moondream3.1-9B-A2B";
+  const payload = { task: opt.task || "query", image: opt.image, stream: false, reasoning: false };
+  if (payload.task === "query") payload.question = opt.question || "What's in this image?";
+  if (payload.task === "caption") payload.caption_length = "normal";
+  if (payload.task === "detect" || payload.task === "point") payload.target = opt.target || "object";
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 60000);
+  let res;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: { Authorization: "Bearer " + acc.api_key, "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: ctrl.signal,
+    });
+  } catch (err) {
+    throw new PoolError(err.name === "AbortError" ? "看图超时，换号重试" : "网络错误：" + formatError(err), "truncated", 504);
+  } finally {
+    clearTimeout(timer);
+  }
+  const text = await res.text();
+  let data;
+  try { data = JSON.parse(text); }
+  catch { throw new PoolError("看图响应被截断，换号重试", "truncated", 502); }
+  if (!res.ok || (data && data.success === false)) {
+    const message = cfMessage(data, text) || ("HTTP " + res.status);
+    throw new PoolError(message, classifyError(res.status, message), res.status);
+  }
+  const result = (data && data.result) || data || {};
+  return {
+    answer: result.answer || result.caption || result.response || "",
+    caption: result.caption || "",
+    objects: result.objects || null,
+    points: result.points || null,
+    raw: result,
+  };
+}
+
 async function generate(body, onProgress) {
   if (!POOL.accounts.length) throw new PoolError("号池为空", "config", 500);
   const prompt = String(body.prompt || "").trim();
   if (!prompt) throw new PoolError("请输入提示词", "bad_input", 400);
   let model = resolveModel(body.model || process.env.DEFAULT_MODEL);
+  if (model.caps && model.caps.includes("vision")) return vision(body);
   const images = await normalizeImages(collectImages(body));
   if (images.length && !model.caps.includes("img2img")) model = resolveModel("flux-2-klein-4b");
   const [width, height] = parseSize(body);
