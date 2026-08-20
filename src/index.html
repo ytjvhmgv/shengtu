@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>焰池 FluxPool — Cloudflare 号池生图</title>
+<style>
+:root {
+  --bg: #f6efe6;
+  --bg2: #ead9c6;
+  --card: rgba(255,251,246,.86);
+  --card-solid: #fffaf4;
+  --text: #2a1c14;
+  --muted: #8a6d57;
+  --line: rgba(90,50,24,.12);
+  --brand: #e25b2a;
+  --brand2: #f0a202;
+  --ok: #12805c;
+  --err: #c43c2c;
+  --shadow: 0 18px 50px rgba(90,40,10,.12);
+  --radius: 18px;
+}
+[data-theme="dark"] {
+  --bg: #140d0a;
+  --bg2: #24160f;
+  --card: rgba(36,22,16,.82);
+  --card-solid: #1c120e;
+  --text: #ffeede;
+  --muted: #c4a28a;
+  --line: rgba(255,180,120,.12);
+  --shadow: 0 18px 50px rgba(0,0,0,.4);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; }
+body {
+  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background:
+    radial-gradient(1100px 480px at 8% -10%, rgba(226,91,42,.28), transparent 55%),
+    radial-gradient(900px 420px at 100% 0%, rgba(240,162,2,.18), transparent 50%),
+    var(--bg);
+  color: var(--text);
+  line-height: 1.55;
+}
+button, input, select, textarea { font: inherit; }
+button { cursor: pointer; }
+.app { max-width: 1280px; margin: 0 auto; padding: 22px 18px 40px; }
+.nav { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+.brand { display: flex; align-items: center; gap: 12px; }
+.logo {
+  width: 42px; height: 42px; border-radius: 14px;
+  background: linear-gradient(135deg, var(--brand), var(--brand2));
+  display: grid; place-items: center; color: #fff; font-weight: 800;
+  box-shadow: 0 10px 24px rgba(226,91,42,.35);
+}
+.brand h1 { margin: 0; font-size: 18px; }
+.brand p { margin: 0; color: var(--muted); font-size: 12px; }
+.nav-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.icon-btn, .ghost {
+  border: 1px solid var(--line); background: var(--card); color: var(--text);
+  border-radius: 12px; padding: 8px 12px; backdrop-filter: blur(16px);
+  text-decoration: none; display: inline-flex; align-items: center; font-size: 13px;
+}
+.health {
+  display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px;
+}
+.pill {
+  background: var(--card); border: 1px solid var(--line); border-radius: 999px;
+  padding: 6px 10px; font-size: 12px; color: var(--muted);
+}
+.pill b { color: var(--text); }
+.layout { display: grid; grid-template-columns: 390px 1fr; gap: 16px; }
+.panel, .stage, .history {
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: var(--shadow); backdrop-filter: blur(18px);
+}
+.panel { padding: 16px; }
+.stage { min-height: 620px; padding: 16px; display: flex; flex-direction: column; }
+label { display: block; font-size: 12px; color: var(--muted); margin: 12px 0 6px; font-weight: 600; }
+textarea, input[type=text], input[type=number], input[type=password], select {
+  width: 100%; border: 1px solid var(--line); background: var(--card-solid);
+  color: var(--text); border-radius: 12px; padding: 11px 12px; outline: none;
+}
+textarea { min-height: 120px; resize: vertical; }
+textarea:focus, input:focus, select:focus { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(226,91,42,.15); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  border: 1px solid var(--line); background: transparent; color: var(--muted);
+  border-radius: 999px; padding: 6px 10px; font-size: 12px;
+}
+.chip.on { color: var(--brand); border-color: var(--brand); background: rgba(226,91,42,.1); font-weight: 600; }
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.drop {
+  border: 1px dashed var(--line); border-radius: 14px; padding: 14px; color: var(--muted);
+  font-size: 13px; text-align: center; background: rgba(226,91,42,.04); cursor: pointer;
+}
+.thumbs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.thumbs .t { position: relative; }
+.thumbs img { width: 68px; height: 68px; object-fit: cover; border-radius: 10px; display: block; border: 1px solid var(--line); }
+.thumbs button {
+  position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; border: 0;
+  border-radius: 50%; background: #111; color: #fff; font-size: 11px;
+}
+.primary {
+  width: 100%; margin-top: 14px; border: 0; color: #fff; font-weight: 700;
+  border-radius: 14px; padding: 13px 16px;
+  background: linear-gradient(135deg, var(--brand), #f07f3a 55%, var(--brand2));
+  box-shadow: 0 10px 24px rgba(226,91,42,.28);
+}
+.primary:disabled { opacity: .55; cursor: wait; }
+.hints { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.hint { border: 0; background: rgba(226,91,42,.08); color: var(--text); border-radius: 10px; padding: 6px 8px; font-size: 11px; }
+.stage-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.stage-body { flex: 1; display: grid; place-items: center; margin-top: 12px; }
+.empty { text-align: center; color: var(--muted); }
+.empty .frame {
+  width: min(420px, 100%); aspect-ratio: 1; margin: 0 auto 12px; border-radius: 22px;
+  border: 1px dashed var(--line); display: grid; place-items: center;
+  background: linear-gradient(180deg, rgba(226,91,42,.08), transparent); font-size: 42px;
+}
+.result img { max-width: 100%; max-height: 62vh; border-radius: 16px; display: block; margin: 0 auto; }
+.meta { color: var(--muted); font-size: 12px; margin-top: 8px; text-align: center; }
+.actions { display: flex; justify-content: center; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.status { min-height: 20px; font-size: 13px; color: var(--muted); margin-top: 8px; word-break: break-all; }
+.status.err { color: var(--err); font-weight: 500; }
+.status.ok { color: var(--ok); font-weight: 500; }
+.history { margin-top: 16px; padding: 14px; }
+.history h3 { margin: 0 0 10px; font-size: 14px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+.card { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--card-solid); cursor: pointer; }
+.card img { width: 100%; height: 120px; object-fit: cover; display: block; }
+.card .c { padding: 8px; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.adv { display: none; margin-top: 4px; }
+.adv.on { display: block; }
+.toast-wrap { position: fixed; right: 16px; bottom: 16px; display: grid; gap: 8px; z-index: 20; }
+.toast { background: var(--card-solid); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; box-shadow: var(--shadow); font-size: 13px; }
+.tip-badge { font-size: 11px; background: rgba(226,91,42,.12); color: var(--brand); padding: 2px 6px; border-radius: 6px; margin-left: 4px; font-weight: normal; }
+@media (max-width: 960px) { .layout { grid-template-columns: 1fr; } .stage { min-height: 420px; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="nav">
+    <div class="brand">
+      <div class="logo">焰</div>
+      <div>
+        <h1>焰池 FluxPool</h1>
+        <p>Cloudflare Workers AI 号池 · 神经元用尽自动换号</p>
+      </div>
+    </div>
+    <div class="nav-actions">
+      <button class="ghost" id="themeBtn" type="button">切换主题</button>
+      <button class="ghost" id="healthBtn" type="button">刷新号池</button>
+    </div>
+  </div>
+  <div class="health" id="health"></div>
+  <div class="layout">
+    <aside class="panel">
+      <label>提示词</label>
+      <textarea id="prompt" placeholder="例如：雨夜霓虹街道，水面倒影，电影灯光，超高细节"></textarea>
+      <div class="hints" id="hints"></div>
+      <label>模型 <span class="tip-badge" id="modelTip">号池轮询</span></label>
+      <select id="model"></select>
+      <label>画幅比例</label>
+      <div class="chips" id="ratios"></div>
+      <label>风格预设</label>
+      <div class="chips" id="styles"></div>
+      <label>参考图 · 图生图（可选，最多 3 张）</label>
+      <div class="drop" id="drop">点击上传或拖拽图片</div>
+      <input id="file" type="file" accept="image/*" multiple hidden>
+      <div class="thumbs" id="thumbs"></div>
+      <button class="ghost" id="advBtn" type="button" style="margin-top:12px;width:100%;justify-content:center">高级参数</button>
+      <div class="adv" id="adv">
+        <div class="row">
+          <div>
+            <label>种子（空=随机）</label>
+            <input id="seed" type="number" placeholder="随机">
+          </div>
+          <div>
+            <label>步数（Schnell 用）</label>
+            <input id="steps" type="number" placeholder="默认">
+          </div>
+        </div>
+        <label>访问密钥（如果部署时设置了 ACCESS_KEY）</label>
+        <input id="apiKey" type="password" placeholder="没有就留空">
+      </div>
+      <button class="primary" id="go" type="button">生成图像</button>
+      <div class="status" id="status">快捷键：Ctrl + Enter。某个账号当天神经元用尽后会自动换下一个，不再重复打空号。</div>
+    </aside>
+    <section class="stage">
+      <div class="stage-head">
+        <strong>画布预览</strong>
+        <span class="status" id="elapsed"></span>
+      </div>
+      <div class="stage-body" id="canvas">
+        <div class="empty">
+          <div class="frame">焰</div>
+          <div>输入提示词，点击生成。号池会轮询，额度用尽自动跳号。</div>
+        </div>
+      </div>
+    </section>
+  </div>
+  <section class="history">
+    <h3>最近作品</h3>
+    <div class="grid" id="history"></div>
+  </section>
+</div>
+<div class="toast-wrap" id="toasts"></div>
+<script>
+(function () {
+  var RATIOS = ["1:1","16:9","9:16","4:3","3:4","3:2","2:3"];
+  var STYLES = [
+    {id:"", name:"默认"},
+    {id:"cinematic lighting, film still, 35mm, dramatic atmosphere, ", name:"电影感"},
+    {id:"photorealistic, DSLR photo, natural lighting, highly detailed, ", name:"写实"},
+    {id:"anime style, vibrant colors, clean lineart, studio lighting, ", name:"动漫"},
+    {id:"watercolor painting, soft pigments, paper texture, ", name:"水彩"},
+    {id:"cyberpunk, neon lights, rainy night, futuristic city, ", name:"赛博朋克"},
+    {id:"traditional Chinese aesthetic, elegant ink wash, misty atmosphere, ", name:"国风"}
+  ];
+  var HINTS = [
+    "雨夜霓虹赛博朋克街道，水面倒影，胶片颗粒",
+    "新中式庭院，薄雾红灯笼，写实摄影",
+    "超可爱毛绒小龙，大眼睛，柔软灯光，3D 渲染",
+    "一只橘猫坐在窗台上看雨，电影灯光"
+  ];
+  var state = { ratio: "1:1", style: "", images: [], history: [], timer: null };
+
+  function $(id) { return document.getElementById(id); }
+  function toast(msg) {
+    var el = document.createElement("div");
+    el.className = "toast";
+    el.textContent = String(msg || "");
+    $("toasts").appendChild(el);
+    setTimeout(function () { el.remove(); }, 3200);
+  }
+  function setStatus(msg, cls) {
+    var el = $("status");
+    el.className = "status " + (cls || "");
+    el.textContent = String(msg || "");
+  }
+  function applyTheme(t) {
+    document.documentElement.setAttribute("data-theme", t);
+    localStorage.setItem("fluxpool-theme", t);
+  }
+  applyTheme(localStorage.getItem("fluxpool-theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
+  $("themeBtn").onclick = function () {
+    applyTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark");
+  };
+  $("apiKey").value = localStorage.getItem("fluxpool-key") || "";
+  $("apiKey").addEventListener("change", function () {
+    localStorage.setItem("fluxpool-key", $("apiKey").value.trim());
+  });
+
+  RATIOS.forEach(function (r) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "chip" + (r === state.ratio ? " on" : "");
+    b.textContent = r;
+    b.onclick = function () {
+      state.ratio = r;
+      document.querySelectorAll("#ratios .chip").forEach(function (x) { x.classList.remove("on"); });
+      b.classList.add("on");
+    };
+    $("ratios").appendChild(b);
+  });
+  STYLES.forEach(function (s, i) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "chip" + (i === 0 ? " on" : "");
+    b.textContent = s.name;
+    b.onclick = function () {
+      state.style = s.id;
+      document.querySelectorAll("#styles .chip").forEach(function (x) { x.classList.remove("on"); });
+      b.classList.add("on");
+    };
+    $("styles").appendChild(b);
+  });
+  HINTS.forEach(function (h) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "hint";
+    b.textContent = h;
+    b.onclick = function () { $("prompt").value = h; };
+    $("hints").appendChild(b);
+  });
+  $("advBtn").onclick = function () { $("adv").classList.toggle("on"); };
+
+  var drop = $("drop");
+  drop.onclick = function () { $("file").click(); };
+  drop.ondragover = function (e) { e.preventDefault(); drop.classList.add("drag"); };
+  drop.ondragleave = function () { drop.classList.remove("drag"); };
+  drop.ondrop = function (e) {
+    e.preventDefault();
+    drop.classList.remove("drag");
+    addFiles(e.dataTransfer.files);
+  };
+  $("file").onchange = function () { addFiles($("file").files); $("file").value = ""; };
+  function addFiles(files) {
+    Array.from(files || []).forEach(function (f) {
+      if (state.images.length >= 3) return;
+      var reader = new FileReader();
+      reader.onload = function () {
+        state.images.push(reader.result);
+        renderThumbs();
+      };
+      reader.readAsDataURL(f);
+    });
+  }
+  function renderThumbs() {
+    $("thumbs").innerHTML = "";
+    state.images.forEach(function (src, i) {
+      var wrap = document.createElement("div");
+      wrap.className = "t";
+      wrap.innerHTML = "<img src=\"" + src + "\"><button type=\"button\">x</button>";
+      wrap.querySelector("button").onclick = function () {
+        state.images.splice(i, 1);
+        renderThumbs();
+      };
+      $("thumbs").appendChild(wrap);
+    });
+  }
+
+  function headers() {
+    var h = { "Content-Type": "application/json" };
+    var key = $("apiKey").value.trim();
+    if (key) h.Authorization = "Bearer " + key;
+    return h;
+  }
+  async function api(path, opt) {
+    opt = opt || {};
+    var h = Object.assign({}, headers(), opt.headers || {});
+    var res = await fetch(path, Object.assign({}, opt, { headers: h }));
+    var data = await res.json().catch(function () { return {}; });
+    if (!res.ok) throw new Error(data.error || data.message || ("HTTP " + res.status));
+    return data;
+  }
+  async function loadHealth() {
+    try {
+      var h = await api("/api/health");
+      var backend = h.backend === "d1" ? "D1" : "Cache";
+      $("health").innerHTML =
+        "<span class=\"pill\">状态库 <b>" + backend + "</b></span>" +
+        "<span class=\"pill\">号池 <b>" + h.available + "</b> / " + h.total + " 可用</span>" +
+        "<span class=\"pill\">今日神经元耗尽 <b>" + h.neurons_exhausted + "</b></span>" +
+        "<span class=\"pill\">停用 <b>" + h.disabled + "</b></span>" +
+        "<span class=\"pill\">轮询指针 <b>" + h.cursor + "</b></span>";
+    } catch (e) {
+      $("health").innerHTML = "<span class=\"pill\">号池状态读取失败</span>";
+    }
+  }
+  $("healthBtn").onclick = loadHealth;
+  loadHealth();
+
+  async function loadModels() {
+    var sel = $("model");
+    try {
+      var data = await api("/api/models");
+      sel.innerHTML = "";
+      Object.keys(data.items || {}).forEach(function (g) {
+        var og = document.createElement("optgroup");
+        og.label = g;
+        (data.items[g] || []).forEach(function (m) {
+          var op = document.createElement("option");
+          op.value = m.id;
+          op.textContent = m.name + " · " + (m.hint || "");
+          og.appendChild(op);
+        });
+        sel.appendChild(og);
+      });
+      sel.value = data.default || "flux-2-klein-4b";
+    } catch (e) {
+      sel.innerHTML = "<option value=\"flux-2-klein-4b\">FLUX.2 Klein 4B</option>";
+    }
+  }
+  loadModels();
+  $("model").addEventListener("change", function () {
+    if ($("model").value === "flux-2-dev") {
+      setStatus("FLUX.2 Dev 可以用。大约 30-90 秒，请保持页面开着，不要刷新。");
+    } else {
+      setStatus("快捷键：Ctrl + Enter。某个账号当天神经元用尽后会自动换下一个。");
+    }
+  });
+
+  try {
+    var rawHist = localStorage.getItem("fluxpool-history") || "[]";
+    if (rawHist.length > 200000) {
+      localStorage.removeItem("fluxpool-history");
+      rawHist = "[]";
+    }
+    state.history = JSON.parse(rawHist).filter(function (item) { return item && item.image; }).slice(0, 8);
+  } catch (e) {
+    try { localStorage.removeItem("fluxpool-history"); } catch (e2) {}
+    state.history = [];
+  }
+  function saveHistory() {
+    try {
+      var slim = state.history.slice(0, 8).map(function (item) {
+        return {
+          prompt: item.prompt,
+          model: item.model,
+          account: item.account,
+          duration_sec: item.duration_sec,
+          ts: item.ts || Date.now()
+        };
+      });
+      localStorage.setItem("fluxpool-history", JSON.stringify(slim));
+    } catch (e) {
+      try { localStorage.removeItem("fluxpool-history"); } catch (e2) {}
+    }
+  }
+  function renderHistory() {
+    $("history").innerHTML = "";
+    state.history.forEach(function (item) {
+      if (!item.image) return;
+      var el = document.createElement("div");
+      el.className = "card";
+      el.innerHTML = "<img src=\"" + item.image + "\"><div class=\"c\">" + (item.model || "") + " · " + (item.prompt || "") + "</div>";
+      el.onclick = function () { showResult(item); };
+      $("history").appendChild(el);
+    });
+  }
+  function showResult(item) {
+    $("canvas").innerHTML = "<div class=\"result\"><img src=\"" + item.image + "\"><div class=\"meta\">" +
+      (item.model || "") + (item.account ? " · " + item.account : "") +
+      (item.duration_sec ? " · " + Number(item.duration_sec).toFixed(1) + "s" : "") +
+      "</div><div class=\"actions\"></div></div>";
+    var actions = $("canvas").querySelector(".actions");
+    var a = document.createElement("a");
+    a.className = "ghost";
+    a.textContent = "下载原图";
+    a.href = item.image;
+    a.download = (item.model || "flux") + ".jpg";
+    var b = document.createElement("button");
+    b.className = "ghost";
+    b.type = "button";
+    b.textContent = "用作参考图";
+    b.onclick = function () {
+      if (state.images.length < 3) {
+        state.images.push(item.image);
+        renderThumbs();
+        toast("已加入参考图");
+      }
+    };
+    actions.appendChild(a);
+    actions.appendChild(b);
+  }
+  renderHistory();
+
+  async function poll(id) {
+    for (var i = 0; i < 90; i++) {
+      var data = await api("/api/tasks/" + id);
+      if (data.status === "completed") return data;
+      if (data.status === "error") throw new Error(data.error || "生成失败");
+      $("elapsed").textContent = data.status === "processing" ? "号池出图中…" : "排队分配账号…";
+      await new Promise(function (r) { setTimeout(r, 1500); });
+    }
+    throw new Error("等待出图超时");
+  }
+
+
+  function isNetErr(msg) {
+    return /timeout|timed out|1101|524|504|NetworkError|Failed to fetch|network error|networkerror/i.test(String(msg || ""));
+  }
+
+  async function waitForJob(jobId) {
+    for (var i = 0; i < 60; i++) {
+      setStatus("连接中断，正在找回结果（" + (i + 1) + "/60）…");
+      try {
+        var job = await api("/api/jobs/" + jobId);
+        if (job.status === "completed" && (job.image_base64 || job.image_url)) return job;
+        if (job.status === "error") throw new Error(job.error || "生成失败");
+      } catch (e) {
+        if (e.message && e.message.indexOf("生成失败") >= 0) throw e;
+      }
+      await new Promise(function (r) { setTimeout(r, 2000); });
+    }
+    throw new Error("出图超过 2 分钟仍未取回结果。请再点一次生成，已耗尽的号会被跳过。");
+  }
+
+  async function generateStream(payload) {
+    var jobId = null;
+    var res;
+    try {
+      res = await fetch("/api/generate/stream", {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify(payload)
+      });
+    } catch (e) {
+      throw new Error("network error");
+    }
+    if (!res.ok) {
+      var errBody = await res.json().catch(function () { return {}; });
+      throw new Error(errBody.error || ("HTTP " + res.status));
+    }
+    if (!res.body || !res.body.getReader) throw new Error("浏览器不支持流式出图");
+    var reader = res.body.getReader();
+    var dec = new TextDecoder();
+    var buf = "";
+    var finalData = null;
+    try {
+    while (true) {
+      var chunk = await reader.read();
+      if (chunk.done) break;
+      buf += dec.decode(chunk.value, { stream: true });
+      var parts = buf.split("\n\n");
+      buf = parts.pop();
+      parts.forEach(function (block) {
+        var ev = "message";
+        var dataLines = [];
+        block.split("\n").forEach(function (line) {
+          if (line.indexOf("event:") === 0) ev = line.slice(6).trim();
+          else if (line.indexOf("data:") === 0) dataLines.push(line.slice(5).trim());
+        });
+        if (!dataLines.length) return;
+        var data;
+        try { data = JSON.parse(dataLines.join("\n")); } catch (e) { return; }
+        if (data && data.job_id) jobId = data.job_id;
+        if (ev === "status" || ev === "ping") {
+          if (data && data.message) setStatus(data.message);
+          $("elapsed").textContent = ev === "ping" ? "出图中，连接保活…" : (data && data.message) || "号池正在生成…";
+          return;
+        }
+        if (ev === "error") throw new Error(data.error || "生成失败");
+        if (ev === "done") finalData = data;
+      });
+    }
+    } catch (e) {
+      if (jobId && isNetErr(e.message || e)) {
+        return await waitForJob(jobId);
+      }
+      throw e;
+    }
+    if (!finalData) {
+      if (jobId) return await waitForJob(jobId);
+      throw new Error("没有返回图片");
+    }
+    return finalData;
+  }
+
+  async function generate() {
+    var prompt = $("prompt").value.trim();
+    if (!prompt) { setStatus("请输入提示词", "err"); return; }
+    var go = $("go");
+    go.disabled = true;
+    go.textContent = "生成中…";
+    setStatus("正在提交到号池…");
+    var started = Date.now();
+    if (state.timer) clearInterval(state.timer);
+    state.timer = setInterval(function () {
+      $("elapsed").textContent = ((Date.now() - started) / 1000).toFixed(1) + "s";
+    }, 200);
+    try {
+      var payload = {
+        prompt: (state.style || "") + prompt,
+        model: $("model").value || "flux-2-klein-4b",
+        aspect_ratio: state.ratio
+      };
+      if ($("seed").value) payload.seed = Number($("seed").value);
+      if ($("steps").value) payload.steps = Number($("steps").value);
+      if (state.images.length) payload.images = state.images;
+      setStatus($("model").value === "flux-2-dev" ? "Dev 出图中，可能要 30-90 秒，连接会保活，请不要刷新。" : "正在出图…");
+      var data = await generateStream(payload);
+      var image = data.image_base64 || data.image_url;
+      if (!image) throw new Error("没有返回图片");
+      var item = {
+        prompt: prompt,
+        model: data.model,
+        account: data.account,
+        duration_sec: data.duration_sec,
+        image: image
+      };
+      item.ts = Date.now();
+      showResult(item);
+      state.history.unshift(item);
+      state.history = state.history.slice(0, 8);
+      saveHistory();
+      renderHistory();
+      setStatus("出图完成 · 本次用的是 " + (data.account || "号池账号") + (data.tried ? "，跳过了 " + data.tried + " 个不可用号" : ""), "ok");
+      toast("出图完成");
+      loadHealth();
+    } catch (err) {
+      var msg = err.message || String(err);
+      if (isNetErr(msg) || msg.indexOf("等待出图超时") >= 0) {
+        msg = "网络在约 60 秒被掐断。新版本会自动找回结果；若仍失败请再点一次生成（已耗尽的号会跳过）。";
+      }
+      setStatus(msg, "err");
+      toast(msg);
+      loadHealth();
+    } finally {
+      clearInterval(state.timer);
+      go.disabled = false;
+      go.textContent = "生成图像";
+    }
+  }
+  $("go").onclick = generate;
+  $("prompt").addEventListener("keydown", function (e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") generate();
+  });
+})();
+</script>
+</body>
+</html>

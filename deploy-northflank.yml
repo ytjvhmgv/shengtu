@@ -1,0 +1,74 @@
+name: Build and deploy to Northflank
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write pool.json from secret
+        env:
+          POOL_JSON: ${{ secrets.POOL_JSON }}
+        run: |
+          if [ -n "$POOL_JSON" ]; then
+            printf '%s' "$POOL_JSON" > pool.json
+          else
+            echo "No POOL_JSON GitHub secret; runtime should provide /data/pool.json or POOL_JSON on Northflank"
+          fi
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image name
+        id: meta
+        run: |
+          echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+          echo "tag=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.image }}:latest
+            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}
+
+      - name: Trigger Northflank rollout
+        env:
+          NORTHFLANK_API_TOKEN: ${{ secrets.NORTHFLANK_API_TOKEN }}
+          NF_PROJECT_ID: ${{ secrets.NORTHFLANK_PROJECT_ID }}
+          NF_SERVICE_ID: ${{ secrets.NORTHFLANK_SERVICE_ID }}
+          IMAGE: ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ -z "${NORTHFLANK_API_TOKEN:-}" ] || [ -z "${NF_PROJECT_ID:-}" ] || [ -z "${NF_SERVICE_ID:-}" ]; then
+            echo "Image pushed: $IMAGE"
+            echo "Skip Northflank API: add NORTHFLANK_API_TOKEN, NORTHFLANK_PROJECT_ID, NORTHFLANK_SERVICE_ID"
+            exit 0
+          fi
+          payload=$(jq -n --arg image "$IMAGE" '{deployment:{external:{imagePath:$image}}}')
+          code=$(curl -sS -o /tmp/nf.json -w "%{http_code}" -X PATCH \
+            "https://api.northflank.com/v1/projects/${NF_PROJECT_ID}/services/${NF_SERVICE_ID}" \
+            -H "Authorization: Bearer ${NORTHFLANK_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "$payload")
+          echo "Northflank HTTP $code"
+          cat /tmp/nf.json || true
+          if [ "$code" -lt 200 ] || [ "$code" -ge 300 ]; then
+            echo "If this 404s, create a Combined Service on Northflank that pulls this GHCR image, then put its IDs into secrets."
+            exit 1
+          fi
