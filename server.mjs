@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 import { createAuth } from "./src/auth.mjs";
+import { r2Enabled, uploadToR2, deleteFromR2, getFromR2, publicObjectUrl } from "./src/r2.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 8080);
@@ -28,46 +29,79 @@ const ADMIN_PAGE = `<!DOCTYPE html>
 <html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>焰池管理员</title>
 <style>
-body{font-family:sans-serif;max-width:920px;margin:24px auto;padding:0 16px;background:#f7f3ff;color:#231c36}
-h1{font-size:20px}label{display:block;margin:10px 0 4px;font-size:12px;color:#666}
+body{font-family:sans-serif;max-width:1080px;margin:24px auto;padding:0 16px;background:#f7f3ff;color:#231c36}
+h1{font-size:20px}h3{margin:0 0 10px}label{display:block;margin:10px 0 4px;font-size:12px;color:#666}
 input{padding:8px 10px;border:1px solid #ddd;border-radius:8px;width:160px}
 button{margin-top:12px;padding:8px 14px;border:0;border-radius:8px;background:#a855f7;color:#fff;cursor:pointer}
 table{width:100%;border-collapse:collapse;margin-top:16px;background:#fff;border-radius:12px;overflow:hidden}
 th,td{padding:8px 10px;border-bottom:1px solid #eee;font-size:13px;text-align:left}
 .card{background:#fff;padding:16px;border-radius:12px;margin:16px 0}
-a{color:#7c3aed}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:end}
+a{color:#7c3aed}code{background:#f3e8ff;padding:2px 6px;border-radius:6px}
 </style></head><body>
-<h1>焰池管理员 · 优惠码</h1>
+<h1>焰池管理员 · 优惠码 / 存图上限</h1>
 <p><a href="/">返回生图</a></p>
 <div class="card">
   <h3>生成优惠码</h3>
-  <label>每天可生成张数</label><input id="daily" type="number" value="20">
-  <label>可使用天数</label><input id="days" type="number" value="7">
-  <label>可被兑换次数</label><input id="max" type="number" value="1">
-  <label>备注</label><input id="note" type="text" placeholder="例如：内测用户">
+  <div class="row">
+    <div><label>每天可生成张数</label><input id="daily" type="number" value="20"></div>
+    <div><label>可使用天数</label><input id="days" type="number" value="7"></div>
+    <div><label>可被兑换次数</label><input id="max" type="number" value="1"></div>
+    <div><label>云图库上限（张）</label><input id="storage" type="number" value="50"></div>
+    <div><label>备注</label><input id="note" type="text" placeholder="例如：内测用户"></div>
+  </div>
   <div><button id="go">生成</button></div>
   <p id="out"></p>
 </div>
 <div class="card">
-  <h3>已生成</h3>
-  <table><thead><tr><th>码</th><th>每天张数</th><th>天数</th><th>已兑/上限</th><th>备注</th></tr></thead>
+  <h3>已生成优惠码</h3>
+  <table><thead><tr><th>码</th><th>每天张数</th><th>天数</th><th>存图上限</th><th>已兑/上限</th><th>备注</th></tr></thead>
   <tbody id="tb"></tbody></table>
+</div>
+<div class="card">
+  <h3>用户存图上限</h3>
+  <p style="font-size:13px;color:#666">可单独改某个已兑换用户的云图库张数。0 表示不让存图。</p>
+  <div class="row">
+    <div><label>用户 ID</label><input id="uid" type="text" placeholder="Linux Do 数字 ID"></div>
+    <div><label>新的存图上限</label><input id="ustorage" type="number" value="50"></div>
+    <div><button id="usave">保存上限</button></div>
+  </div>
+  <p id="uout"></p>
+  <table><thead><tr><th>用户</th><th>ID</th><th>今日已用</th><th>云图库</th><th>到期</th></tr></thead>
+  <tbody id="users"></tbody></table>
 </div>
 <script>
 async function load(){
   const r = await fetch('/api/admin/codes');
   const d = await r.json();
-  document.getElementById('tb').innerHTML = (d.items||[]).map(c => '<tr><td>'+c.code+'</td><td>'+c.dailyLimit+'</td><td>'+c.days+'</td><td>'+c.usedCount+'/'+c.maxRedeems+'</td><td>'+(c.note||'')+'</td></tr>').join('');
+  document.getElementById('tb').innerHTML = (d.items||[]).map(c => '<tr><td><code>'+c.code+'</code></td><td>'+c.dailyLimit+'</td><td>'+c.days+'</td><td>'+(c.storageLimit??50)+'</td><td>'+c.usedCount+'/'+c.maxRedeems+'</td><td>'+(c.note||'')+'</td></tr>').join('');
+  const ur = await fetch('/api/admin/users');
+  const ud = await ur.json();
+  document.getElementById('users').innerHTML = (ud.items||[]).map(u => {
+    const p = u.plan || {};
+    const exp = p.expiresAt ? new Date(p.expiresAt).toLocaleDateString() : '-';
+    return '<tr><td>@'+(u.username||'')+(u.admin?' · 管理':'')+'</td><td>'+u.id+'</td><td>'+(p.usedToday||0)+'/'+(p.dailyLimit||0)+'</td><td>'+(u.storedCount||0)+'/'+(u.storageLimit||p.storageLimit||0)+'</td><td>'+exp+'</td></tr>';
+  }).join('');
 }
 document.getElementById('go').onclick = async function(){
   const r = await fetch('/api/admin/codes', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
     dailyLimit: Number(document.getElementById('daily').value),
     days: Number(document.getElementById('days').value),
     maxRedeems: Number(document.getElementById('max').value),
+    storageLimit: Number(document.getElementById('storage').value),
     note: document.getElementById('note').value
   })});
   const d = await r.json();
-  document.getElementById('out').textContent = d.code ? ('已生成：'+d.code.code) : (d.error||'失败');
+  document.getElementById('out').textContent = d.code ? ('已生成：'+d.code.code+'  每天'+d.code.dailyLimit+'张 / '+d.code.days+'天 / 存图'+d.code.storageLimit+'张') : (d.error||'失败');
+  load();
+};
+document.getElementById('usave').onclick = async function(){
+  const r = await fetch('/api/admin/users', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
+    id: document.getElementById('uid').value.trim(),
+    storageLimit: Number(document.getElementById('ustorage').value)
+  })});
+  const d = await r.json();
+  document.getElementById('uout').textContent = d.user ? ('已更新 @'+d.user.username+' 存图上限 '+d.user.storageLimit) : (d.error||'失败');
   load();
 };
 load();
@@ -190,9 +224,44 @@ const server = http.createServer(async (req, res) => {
       });
       return res.end(JSON.stringify({ ok: true }));
     }
+    if (req.method === "GET" && p === "/api/gallery") {
+      const user = await requireUser(req, res, false);
+      if (!user) return;
+      const items = await authApi.listGallery(user);
+      const limit = user.admin ? 99999 : Number((user.plan && user.plan.storageLimit) ?? 50);
+      return json(res, { r2: r2Enabled(), items, storageLimit: limit, storedCount: items.length });
+    }
+    if (req.method === "GET" && p.startsWith("/api/gallery/file/")) {
+      const user = await requireUser(req, res, false);
+      if (!user) return;
+      const key = decodeURIComponent(p.slice("/api/gallery/file/".length));
+      const item = (user.gallery || []).find((x) => x.key === key);
+      if (!item && !user.admin) return json(res, { error: "图片不存在" }, 404);
+      try {
+        const obj = await getFromR2(key);
+        if (!obj) return json(res, { error: "未配置 R2" }, 500);
+        res.writeHead(200, {
+          "Content-Type": obj.mime || "image/jpeg",
+          "Cache-Control": "private, max-age=31536000, immutable",
+          "Content-Length": obj.bytes.length,
+        });
+        return res.end(obj.bytes);
+      } catch (err) {
+        return json(res, { error: formatError(err) }, 404);
+      }
+    }
+    if (req.method === "DELETE" && p.startsWith("/api/gallery/")) {
+      const user = await requireUser(req, res, false);
+      if (!user) return;
+      const key = decodeURIComponent(p.slice("/api/gallery/".length));
+      const item = (user.gallery || []).find((x) => x.key === key || x.id === key);
+      if (item && item.key) await deleteFromR2(item.key);
+      const items = await authApi.removeGalleryItem(user, key);
+      return json(res, { ok: true, items, storedCount: items.length });
+    }
     if (req.method === "GET" && p === "/api/me") {
       const user = await currentUser(req);
-      return json(res, { authEnabled: authApi.AUTH_ENABLED, user: authApi.publicUser(user) });
+      return json(res, { authEnabled: authApi.AUTH_ENABLED, r2: r2Enabled(), user: authApi.publicUser(user) });
     }
     if (req.method === "POST" && p === "/api/redeem") {
       const user = await requireUser(req, res, false);
@@ -219,6 +288,13 @@ const server = http.createServer(async (req, res) => {
       const user = await requireUser(req, res, true);
       if (!user) return;
       return json(res, { items: (await authApi.listPrefix("user")).map((u) => authApi.publicUser(u)) });
+    }
+    if (req.method === "POST" && p === "/api/admin/users") {
+      const user = await requireUser(req, res, true);
+      if (!user) return;
+      const body = await readBody(req);
+      try { return json(res, { ok: true, user: await authApi.updateUserPlan(body.id || body.userId, body) }); }
+      catch (err) { return json(res, { error: formatError(err) }, err.status || 400); }
     }
     if (req.method === "GET" && p === "/admin") {
       const user = await requireUser(req, res, true);
@@ -263,12 +339,13 @@ const server = http.createServer(async (req, res) => {
       const body = await readBody(req);
       if (p === "/v1/images/edits") body.images = collectImages(body);
       try {
-        const result = await generate(body);
+        let result = await generate(body);
+        result = await maybeStoreR2(user, result, randomUUID(), body);
         if (p.startsWith("/v1/images/")) {
           const b64 = String(result.image_base64 || "").replace(/^data:[^;]+;base64,/, "");
-          return json(res, { created: Math.floor(Date.now() / 1000), data: [{ b64_json: b64 }], model: result.model, account: result.account });
+          return json(res, { created: Math.floor(Date.now() / 1000), data: [{ b64_json: b64, url: result.stored ? result.image_url : undefined }], model: result.model, account: result.account });
         }
-        return json(res, { status: "completed", ...result });
+        return json(res, { status: "completed", ...publicResult(result) });
       } catch (err) {
         await authApi.refundQuota(user);
         return json(res, { status: "error", error: formatError(err) }, err.status || 500);
@@ -322,7 +399,7 @@ function json(res, data, status = 200) {
     "Content-Type": "application/json; charset=utf-8",
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "Content-Type, Authorization, x-api-key",
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
     "Content-Length": Buffer.byteLength(body),
   });
   res.end(body);
@@ -332,8 +409,17 @@ function html(res, page) {
   res.end(page);
 }
 function send(res, status, body) {
-  res.writeHead(status, { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "Content-Type, Authorization, x-api-key", "Access-Control-Allow-Methods": "GET, POST, OPTIONS" });
+  res.writeHead(status, { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "Content-Type, Authorization, x-api-key", "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS" });
   res.end(body || "");
+}
+function publicResult(result) {
+  if (!result) return result;
+  const out = { ...result };
+  delete out.bytes;
+  if (out.stored && out.image_url && !String(out.image_url).startsWith("data:")) {
+    delete out.image_base64;
+  }
+  return out;
 }
 async function readBody(req) {
   const chunks = [];
@@ -341,6 +427,39 @@ async function readBody(req) {
   const raw = Buffer.concat(chunks).toString("utf8");
   if (!raw) return {};
   return JSON.parse(raw);
+}
+
+async function maybeStoreR2(user, result, jobId, body) {
+  if (!user || !result || !result.bytes || !r2Enabled()) return result;
+  let uploaded = null;
+  try {
+    uploaded = await uploadToR2({
+      userId: user.id,
+      bytes: result.bytes,
+      mime: result.mime,
+      jobId,
+    });
+    if (!uploaded) return result;
+    await authApi.addGalleryItem(user, {
+      id: jobId,
+      key: uploaded.key,
+      url: uploaded.url || publicObjectUrl(uploaded.key),
+      mime: uploaded.mime,
+      bytes: uploaded.bytes,
+      model: result.model,
+      prompt: String((body && body.prompt) || "").slice(0, 240),
+      createdAt: Date.now(),
+    });
+    result.image_url = uploaded.url || publicObjectUrl(uploaded.key);
+    result.stored = true;
+    result.storage_key = uploaded.key;
+  } catch (err) {
+    result.store_error = formatError(err);
+    if (uploaded && uploaded.key) {
+      try { await deleteFromR2(uploaded.key); } catch (_) {}
+    }
+  }
+  return result;
 }
 
 async function streamGenerate(req, res, body, user) {
@@ -356,26 +475,28 @@ async function streamGenerate(req, res, body, user) {
   const sse = (event, data) => {
     try { res.write("event: " + event + "\ndata: " + JSON.stringify(data) + "\n\n"); } catch (_) {}
   };
+  let ping = null;
   if (user) {
     try { await authApi.consumeQuota(user); }
     catch (err) {
       sse("error", { job_id: jobId, error: formatError(err) });
-      clearInterval(ping);
       try { res.end(); } catch (_) {}
       return;
     }
   }
   sse("status", { job_id: jobId, message: "开始出图，额度用尽会自动换号" });
-  const ping = setInterval(() => {
+  ping = setInterval(() => {
     sse("ping", { job_id: jobId, t: Date.now() });
     try { res.write(":" + " ".repeat(256) + "\n\n"); } catch (_) {}
   }, 2000);
   const t0 = Date.now();
   try {
-    const result = await generate(body, (info) => sse("status", { job_id: jobId, message: info.message || "出图中" }));
+    let result = await generate(body, (info) => sse("status", { job_id: jobId, message: info.message || "出图中" }));
+    result = await maybeStoreR2(user, result, jobId, body);
     await finishJob(jobId, result);
-    sse("done", { job_id: jobId, status: "completed", duration_sec: (Date.now() - t0) / 1000, ...result });
+    sse("done", { job_id: jobId, status: "completed", duration_sec: (Date.now() - t0) / 1000, ...publicResult(result) });
   } catch (err) {
+    await authApi.refundQuota(user);
     await finishJob(jobId, { error: formatError(err) });
     sse("error", { job_id: jobId, error: formatError(err) });
   } finally {
@@ -400,8 +521,10 @@ async function finishJob(id, result) {
     account: result && result.account || null,
     mime: result && result.mime || null,
     tried: result && result.tried || 0,
-    image_base64: result && result.image_base64 || null,
+    image_base64: result && result.stored ? null : (result && result.image_base64 || null),
     image_url: result && result.image_url || null,
+    stored: !!(result && result.stored),
+    store_error: result && result.store_error || null,
     updated_at: Date.now(),
   };
   await writeJob(id, row);
@@ -511,7 +634,7 @@ async function generate(body, onProgress) {
       if (!isCompleteImage(out.bytes, out.mime)) throw new PoolError("图片被截断，账号额度可能中途耗尽", "truncated", 502);
       await report({ account_id: acc.account_id, name: acc.name, ok: true });
       const stored = toDataUri(out.bytes, out.mime);
-      return { model: model.id, account: acc.name, mime: out.mime, image_base64: stored, image_url: stored, tried: tried.length, backend: "node" };
+      return { model: model.id, account: acc.name, mime: out.mime, bytes: out.bytes, image_base64: stored, image_url: stored, tried: tried.length, backend: "node" };
     } catch (err) {
       lastErr = err;
       const kind = err.kind || "other";
