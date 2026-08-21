@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>幻绘星池</title>
+<title>幻绘星池 · Flux Anime Studio</title>
 <style>
 :root {
   --bg: #f8f6fd;
@@ -1580,11 +1580,70 @@ select, input[type=text], input[type=number], input[type=password] {
       (item.duration_sec ? " · 耗时 " + Number(item.duration_sec).toFixed(1) + "s" : "") +
       "</div><div class=\"actions\"></div></div>";
     var actions = canvas.querySelector(".actions");
-    var a = document.createElement("a");
-    a.className = "ghost-btn";
-    a.innerHTML = "<span>⬇️ 保存原画</span>";
-    a.href = item.image;
-    a.download = (item.model || "flux-anime") + "-" + Date.now() + ".jpg";
+    function fileName(src, mime) {
+      var ext = "jpg";
+      if ((mime && mime.indexOf("png") >= 0) || /\.png(\?|$)/i.test(src)) ext = "png";
+      else if ((mime && mime.indexOf("webp") >= 0) || /\.webp(\?|$)/i.test(src)) ext = "webp";
+      return (item.model || "flux-anime") + "-" + Date.now() + "." + ext;
+    }
+    function publicLink() {
+      var src = item.image || "";
+      if (src.indexOf("data:") === 0) return "";
+      if (/^https?:\/\//i.test(src)) return src;
+      if (src.charAt(0) === "/") return location.origin + src;
+      return location.origin + "/" + src;
+    }
+    var saveBtn = document.createElement("button");
+    saveBtn.className = "ghost-btn";
+    saveBtn.type = "button";
+    saveBtn.innerHTML = "<span>⬇️ 保存原画</span>";
+    saveBtn.onclick = async function () {
+      try {
+        var src = item.image;
+        var blob;
+        if (String(src).indexOf("data:") === 0) {
+          blob = await (await fetch(src)).blob();
+        } else {
+          var url = src;
+          if (item.key) url = "/api/gallery/file/" + String(item.key).split("/").map(encodeURIComponent).join("/");
+          var res = await fetch(url, { credentials: "same-origin" });
+          if (!res.ok) throw new Error("HTTP " + res.status);
+          blob = await res.blob();
+        }
+        var a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = fileName(src, blob.type);
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(function () { URL.revokeObjectURL(a.href); }, 1500);
+        toast("已开始下载");
+      } catch (err) {
+        toast("下载失败：" + (err.message || "请长按图片另存"));
+      }
+    };
+    var linkBtn = document.createElement("button");
+    linkBtn.className = "ghost-btn";
+    linkBtn.type = "button";
+    linkBtn.innerHTML = "<span>🔗 复制图床链接</span>";
+    linkBtn.onclick = async function () {
+      var href = publicLink();
+      if (!href) { toast("这张是临时图，还没有图床链接"); return; }
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) await navigator.clipboard.writeText(href);
+        else {
+          var inp = document.createElement("input");
+          inp.value = href;
+          document.body.appendChild(inp);
+          inp.select();
+          document.execCommand("copy");
+          inp.remove();
+        }
+        toast("已复制图床链接");
+      } catch (err) {
+        toast(href);
+      }
+    };
     var b = document.createElement("button");
     b.className = "ghost-btn";
     b.type = "button";
@@ -1596,7 +1655,8 @@ select, input[type=text], input[type=number], input[type=password] {
         toast("已注入参考图槽位");
       }
     };
-    actions.appendChild(a);
+    actions.appendChild(saveBtn);
+    if (publicLink()) actions.appendChild(linkBtn);
     actions.appendChild(b);
   }
 
