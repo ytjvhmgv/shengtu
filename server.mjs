@@ -16,11 +16,18 @@ const DATA_DIR = process.env.DATA_DIR || (fs.existsSync("/data") ? "/data" : pat
 const HOST = "0.0.0.0";
 
 const MODELS = [
-  { id: "flux-2-klein-4b", name: "FLUX.2 Klein 4B", hint: "最快 · 推荐", cf: "@cf/black-forest-labs/flux-2-klein-4b", mode: "multipart", caps: ["txt2img", "img2img"] },
-  { id: "flux-2-klein-9b", name: "FLUX.2 Klein 9B", hint: "更快更高清", cf: "@cf/black-forest-labs/flux-2-klein-9b", mode: "multipart", caps: ["txt2img", "img2img"] },
-  { id: "flux-2-dev", name: "FLUX.2 Dev", hint: "高质量", cf: "@cf/black-forest-labs/flux-2-dev", mode: "multipart", caps: ["txt2img", "img2img"] },
-  { id: "flux-1-schnell", name: "FLUX.1 Schnell", hint: "老款极速 JSON", cf: "@cf/black-forest-labs/flux-1-schnell", mode: "json", caps: ["txt2img"] },
-  { id: "moondream3.1-9B-A2B", name: "Moondream 3.1", hint: "看图问答 · 不能生图", cf: "@cf/moondream/moondream3.1-9B-A2B", mode: "json", caps: ["vision"] },
+  { id: "flux-2-klein-4b", name: "FLUX.2 Klein 4B", hint: "最快 · 推荐", cf: "@cf/black-forest-labs/flux-2-klein-4b", mode: "multipart", caps: ["txt2img", "img2img"], group: "FLUX" },
+  { id: "flux-2-klein-9b", name: "FLUX.2 Klein 9B", hint: "更快更高清", cf: "@cf/black-forest-labs/flux-2-klein-9b", mode: "multipart", caps: ["txt2img", "img2img"], group: "FLUX" },
+  { id: "flux-2-dev", name: "FLUX.2 Dev", hint: "高质量", cf: "@cf/black-forest-labs/flux-2-dev", mode: "multipart", caps: ["txt2img", "img2img"], group: "FLUX" },
+  { id: "flux-1-schnell", name: "FLUX.1 Schnell", hint: "老款极速 JSON", cf: "@cf/black-forest-labs/flux-1-schnell", mode: "json", family: "schnell", caps: ["txt2img"], group: "FLUX", defaultSteps: 4, minSteps: 1, maxSteps: 8, stepKey: "steps" },
+  { id: "lucid-origin", name: "Leonardo Lucid Origin", hint: "提示词跟手 · 文字渲染", cf: "@cf/leonardo/lucid-origin", mode: "json", family: "sd", caps: ["txt2img"], group: "Leonardo", defaultSteps: 20, minSteps: 1, maxSteps: 40, maxSize: 1280, guidance: 4.5 },
+  { id: "phoenix-1.0", name: "Leonardo Phoenix 1.0", hint: "提示词精准 · 可写字", cf: "@cf/leonardo/phoenix-1.0", mode: "json", family: "sd", caps: ["txt2img"], group: "Leonardo", defaultSteps: 25, minSteps: 1, maxSteps: 50, maxSize: 1280, guidance: 2 },
+  { id: "sdxl-lightning", name: "SDXL Lightning", hint: "字节跳动 · 超快 SDXL", cf: "@cf/bytedance/stable-diffusion-xl-lightning", mode: "json", family: "sd", caps: ["txt2img", "img2img"], group: "Stable Diffusion", defaultSteps: 4, minSteps: 1, maxSteps: 20, maxSize: 1024 },
+  { id: "dreamshaper-8-lcm", name: "DreamShaper 8 LCM", hint: "二次元友好 · 少步数", cf: "@cf/lykon/dreamshaper-8-lcm", mode: "json", family: "sd", caps: ["txt2img", "img2img"], group: "Stable Diffusion", defaultSteps: 8, minSteps: 1, maxSteps: 20, maxSize: 1024 },
+  { id: "sdxl-base-1.0", name: "SDXL Base 1.0", hint: "Stability 经典", cf: "@cf/stabilityai/stable-diffusion-xl-base-1.0", mode: "json", family: "sd", caps: ["txt2img", "img2img"], group: "Stable Diffusion", defaultSteps: 20, minSteps: 1, maxSteps: 20, maxSize: 1024 },
+  { id: "sd15-img2img", name: "SD 1.5 图生图", hint: "必须上传参考图", cf: "@cf/runwayml/stable-diffusion-v1-5-img2img", mode: "json", family: "sd", caps: ["img2img"], group: "Stable Diffusion", defaultSteps: 20, minSteps: 1, maxSteps: 20, maxSize: 768 },
+  { id: "sd15-inpaint", name: "SD 1.5 局部重绘", hint: "原图 + 遮罩（白=要改）", cf: "@cf/runwayml/stable-diffusion-v1-5-inpainting", mode: "json", family: "sd", caps: ["inpaint", "img2img"], group: "Stable Diffusion", defaultSteps: 20, minSteps: 1, maxSteps: 20, maxSize: 768 },
+  { id: "moondream3.1-9B-A2B", name: "Moondream 3.1", hint: "看图问答 · 不能生图", cf: "@cf/moondream/moondream3.1-9B-A2B", mode: "json", caps: ["vision"], group: "视觉模型" },
 ];
 const ASPECT = { "1:1": [1024, 1024], "16:9": [1280, 720], "9:16": [720, 1280], "4:3": [1024, 768], "3:4": [768, 1024], "3:2": [1152, 768], "2:3": [768, 1152] };
 const MAX_TRIES = 24;
@@ -183,7 +190,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "GET" && p === "/") return html(res, PAGE);
     if (req.method === "GET" && p === "/healthz") return json(res, { ok: true, accounts: POOL.accounts.length });
     if (req.method === "GET" && (p === "/api/models" || p === "/v1/models")) {
-      return json(res, { default: process.env.DEFAULT_MODEL || "flux-2-klein-4b", items: { "Cloudflare Workers AI 号池": MODELS.map((m) => ({ id: m.id, name: m.name, hint: m.hint, capabilities: m.caps })) } });
+      return json(res, modelsPayload());
     }
     if (req.method === "GET" && p === "/api/health") return json(res, await readHealth());
     if (req.method === "GET" && p === "/auth/linuxdo/login") {
@@ -615,10 +622,17 @@ async function generate(body, onProgress) {
   let model = resolveModel(body.model || process.env.DEFAULT_MODEL);
   if (model.caps && model.caps.includes("vision")) return vision(body);
   const images = await normalizeImages(collectImages(body));
-  if (images.length && !model.caps.includes("img2img")) model = resolveModel("flux-2-klein-4b");
-  const [width, height] = parseSize(body);
+  const needImg = model.caps.includes("inpaint") || (model.caps.includes("img2img") && !model.caps.includes("txt2img"));
+  if (needImg && !images.length) {
+    throw new PoolError(model.caps.includes("inpaint") ? "局部重绘请先上传原图，第二张作为遮罩（白色区域会被重绘）" : "该模型是图生图，请先上传参考图", "bad_input", 400);
+  }
+  if (images.length && !model.caps.includes("img2img") && !model.caps.includes("inpaint")) model = resolveModel("flux-2-klein-4b");
+  const [width, height] = parseSize(body, model);
   const seed = body.seed == null || body.seed === "" ? undefined : Number(body.seed);
   const steps = body.steps == null || body.steps === "" ? undefined : Number(body.steps);
+  const negative = String(body.negative_prompt || body.negative || "").trim();
+  const strength = body.strength == null || body.strength === "" ? undefined : Number(body.strength);
+  const guidance = body.guidance == null || body.guidance === "" ? undefined : Number(body.guidance);
   const candidates = await pickAccounts(MAX_TRIES);
   if (!candidates.length) {
     const health = await readHealth();
@@ -630,7 +644,7 @@ async function generate(body, onProgress) {
     const acc = candidates[i];
     if (typeof onProgress === "function") onProgress({ message: "正在用账号 " + (i + 1) + "/" + candidates.length + " 出图" });
     try {
-      const out = await runAccount(acc, model, { prompt, width, height, seed, steps, images });
+      const out = await runAccount(acc, model, { prompt, width, height, seed, steps, images, negative, strength, guidance });
       if (!isCompleteImage(out.bytes, out.mime)) throw new PoolError("图片被截断，账号额度可能中途耗尽", "truncated", 502);
       await report({ account_id: acc.account_id, name: acc.name, ok: true });
       const stored = toDataUri(out.bytes, out.mime);
@@ -652,6 +666,46 @@ async function generate(body, onProgress) {
   throw new PoolError("连续尝试 " + tried.length + " 个账号仍失败。可用 " + health.available + "/" + health.total + "。最后错误：" + formatError(lastErr), (lastErr && lastErr.kind) || "other", 502);
 }
 
+function modelsPayload() {
+  const items = {};
+  for (const m of MODELS) {
+    const g = m.group || "Cloudflare Workers AI 号池";
+    (items[g] ||= []).push({ id: m.id, name: m.name, hint: m.hint, capabilities: m.caps });
+  }
+  return { default: process.env.DEFAULT_MODEL || "flux-2-klein-4b", items };
+}
+
+function buildJsonPayload(model, opt) {
+  const payload = { prompt: opt.prompt };
+  if (model.family === "schnell") {
+    payload.steps = clamp(opt.steps ?? model.defaultSteps ?? 4, model.minSteps || 1, model.maxSteps || 8);
+    if (opt.seed != null && !Number.isNaN(opt.seed)) payload.seed = opt.seed;
+    return payload;
+  }
+  if (opt.negative) payload.negative_prompt = opt.negative;
+  if (opt.width) payload.width = opt.width;
+  if (opt.height) payload.height = opt.height;
+  if (opt.seed != null && !Number.isNaN(opt.seed)) payload.seed = opt.seed;
+  const steps = clamp(opt.steps ?? model.defaultSteps ?? 20, model.minSteps || 1, model.maxSteps || 20);
+  if (model.stepKey === "steps") payload.steps = steps;
+  else {
+    payload.num_steps = steps;
+    if (String(model.cf).includes("leonardo")) payload.steps = steps;
+  }
+  if (opt.guidance != null && !Number.isNaN(opt.guidance)) payload.guidance = opt.guidance;
+  else if (model.guidance != null) payload.guidance = model.guidance;
+  const imgs = opt.images || [];
+  if (imgs[0] && (model.caps.includes("img2img") || model.caps.includes("inpaint"))) {
+    payload.image_b64 = Buffer.from(imgs[0].bytes).toString("base64");
+    const strength = opt.strength != null && !Number.isNaN(opt.strength) ? opt.strength : 0.72;
+    payload.strength = Math.max(0, Math.min(1, strength));
+  }
+  if (model.caps.includes("inpaint") && imgs[1]) {
+    payload.mask_b64 = Buffer.from(imgs[1].bytes).toString("base64");
+  }
+  return payload;
+}
+
 async function runAccount(acc, model, opt) {
   const url = "https://api.cloudflare.com/client/v4/accounts/" + acc.account_id + "/ai/run/" + model.cf;
   const ctrl = new AbortController();
@@ -659,8 +713,7 @@ async function runAccount(acc, model, opt) {
   let res;
   try {
     if (model.mode === "json") {
-      const payload = { prompt: opt.prompt, steps: clamp(opt.steps ?? 4, 1, 8) };
-      if (opt.seed != null && !Number.isNaN(opt.seed)) payload.seed = opt.seed;
+      const payload = buildJsonPayload(model, opt);
       res = await fetch(url, { method: "POST", headers: { Authorization: "Bearer " + acc.api_key, "Content-Type": "application/json" }, body: JSON.stringify(payload), signal: ctrl.signal });
     } else {
       const form = new FormData();
@@ -679,7 +732,15 @@ async function runAccount(acc, model, opt) {
   } finally {
     clearTimeout(timer);
   }
-  const text = await res.text();
+  const raw = Buffer.from(await res.arrayBuffer());
+  const ctype = String(res.headers.get("content-type") || "");
+  if (ctype.includes("image/")) {
+    if (!res.ok) throw new PoolError("HTTP " + res.status, classifyError(res.status, "image error"), res.status);
+    const mime = sniffMime(raw) || ctype.split(";")[0] || "image/png";
+    if (!isCompleteImage(raw, mime)) throw new PoolError("图片被截断，换号重试", "truncated", 502);
+    return { bytes: raw, mime };
+  }
+  const text = raw.toString("utf8");
   let data;
   try { data = JSON.parse(text); }
   catch { throw new PoolError("上游响应被截断，换号重试", "truncated", 502); }
@@ -691,7 +752,7 @@ async function runAccount(acc, model, opt) {
 }
 
 function parseImage(data, text) {
-  const image = data && data.result && data.result.image;
+  const image = (data && data.result && data.result.image) || (data && data.image) || (typeof (data && data.result) === "string" ? data.result : "");
   if (typeof image === "string" && image.length > 32) {
     let bytes;
     try { bytes = Buffer.from(image, "base64"); }
@@ -774,16 +835,31 @@ function resolveModel(id) {
   const key = String(id || "").trim();
   return MODELS.find((m) => m.id === key || m.cf === key) || MODELS[0];
 }
-function parseSize(body) {
+function parseSize(body, model) {
+  const max = (model && model.maxSize) || 1536;
+  const min = (model && model.minSize) || 256;
+  let w;
+  let h;
   if (body.size && /^\d+x\d+$/i.test(body.size)) {
-    const [w, h] = String(body.size).toLowerCase().split("x").map(Number);
-    return [clamp(w, 256, 1536), clamp(h, 256, 1536)];
+    [w, h] = String(body.size).toLowerCase().split("x").map(Number);
+  } else {
+    const ratio = ASPECT[body.aspect_ratio] ? body.aspect_ratio : "1:1";
+    [w, h] = ASPECT[ratio];
+    if (body.width) w = Number(body.width);
+    if (body.height) h = Number(body.height);
   }
-  const ratio = ASPECT[body.aspect_ratio] ? body.aspect_ratio : "1:1";
-  let [w, h] = ASPECT[ratio];
-  if (body.width) w = Number(body.width);
-  if (body.height) h = Number(body.height);
-  return [clamp(w || 1024, 256, 1536), clamp(h || 1024, 256, 1536)];
+  w = clamp(w || 1024, min, max);
+  h = clamp(h || 1024, min, max);
+  if (Math.max(w, h) > max) {
+    const s = max / Math.max(w, h);
+    w = Math.round(w * s);
+    h = Math.round(h * s);
+  }
+  if (!model || model.family === "sd" || model.mode === "json") {
+    w = Math.max(min, Math.round(w / 8) * 8);
+    h = Math.max(min, Math.round(h / 8) * 8);
+  }
+  return [w, h];
 }
 function collectImages(body) {
   const out = [];
