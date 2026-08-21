@@ -14,6 +14,8 @@ const UPSTASH_TOKEN = String(process.env.UPSTASH_REDIS_REST_TOKEN || "").trim();
 const USE_UPSTASH = !!(UPSTASH_URL && UPSTASH_TOKEN);
 const DATA_DIR = process.env.DATA_DIR || (fs.existsSync("/data") ? "/data" : path.join(__dirname, "data"));
 const HOST = "0.0.0.0";
+const GROK_BASE = String(process.env.GROK_BASE_URL || "https://grok.888.x10.mx").replace(/\/+$/, "");
+const GROK_KEY = String(process.env.GROK_API_KEY || "").trim();
 
 const MODELS = [
   { id: "flux-2-klein-4b", name: "FLUX.2 Klein 4B", hint: "最快 · 推荐", cf: "@cf/black-forest-labs/flux-2-klein-4b", mode: "multipart", caps: ["txt2img", "img2img"], group: "FLUX" },
@@ -27,6 +29,11 @@ const MODELS = [
   { id: "sdxl-base-1.0", name: "SDXL Base 1.0", hint: "Stability 经典", cf: "@cf/stabilityai/stable-diffusion-xl-base-1.0", mode: "json", family: "sd", caps: ["txt2img", "img2img"], group: "Stable Diffusion", defaultSteps: 20, minSteps: 1, maxSteps: 20, maxSize: 1024 },
   { id: "sd15-img2img", name: "SD 1.5 图生图", hint: "必须上传参考图", cf: "@cf/runwayml/stable-diffusion-v1-5-img2img", mode: "json", family: "sd", caps: ["img2img"], group: "Stable Diffusion", defaultSteps: 20, minSteps: 1, maxSteps: 20, maxSize: 768 },
   { id: "sd15-inpaint", name: "SD 1.5 局部重绘", hint: "原图 + 遮罩（白=要改）", cf: "@cf/runwayml/stable-diffusion-v1-5-inpainting", mode: "json", family: "sd", caps: ["inpaint", "img2img"], group: "Stable Diffusion", defaultSteps: 20, minSteps: 1, maxSteps: 20, maxSize: 768 },
+  { id: "grok-imagine-image-2.0", name: "Grok Imagine 2.0", hint: "生图 + 编辑", backend: "grok", caps: ["txt2img", "img2img"], group: "Grok Imagine" },
+  { id: "grok-imagine-image-quality", name: "Grok Imagine Quality", hint: "高质量生图/编辑", backend: "grok", caps: ["txt2img", "img2img"], group: "Grok Imagine" },
+  { id: "grok-imagine-image", name: "Grok Imagine", hint: "标准生图/编辑", backend: "grok", caps: ["txt2img", "img2img"], group: "Grok Imagine" },
+  { id: "grok-imagine-image-lite", name: "Grok Imagine Lite", hint: "更快更省", backend: "grok", caps: ["txt2img"], group: "Grok Imagine" },
+  { id: "grok-imagine-image-edit", name: "Grok Imagine Edit", hint: "只编辑 · 必须参考图", backend: "grok", caps: ["img2img"], group: "Grok Imagine" },
   { id: "moondream3.1-9B-A2B", name: "Moondream 3.1", hint: "看图问答 · 不能生图", cf: "@cf/moondream/moondream3.1-9B-A2B", mode: "json", caps: ["vision"], group: "视觉模型" },
 ];
 const ASPECT = { "1:1": [1024, 1024], "16:9": [1280, 720], "9:16": [720, 1280], "4:3": [1024, 768], "3:4": [768, 1024], "3:2": [1152, 768], "2:3": [768, 1152] };
@@ -616,7 +623,6 @@ async function runVision(acc, opt) {
 }
 
 async function generate(body, onProgress) {
-  if (!POOL.accounts.length) throw new PoolError("号池为空", "config", 500);
   const prompt = String(body.prompt || "").trim();
   if (!prompt) throw new PoolError("请输入提示词", "bad_input", 400);
   let model = resolveModel(body.model || process.env.DEFAULT_MODEL);
@@ -626,7 +632,11 @@ async function generate(body, onProgress) {
   if (needImg && !images.length) {
     throw new PoolError(model.caps.includes("inpaint") ? "局部重绘请先上传原图，第二张作为遮罩（白色区域会被重绘）" : "该模型是图生图，请先上传参考图", "bad_input", 400);
   }
-  if (images.length && !model.caps.includes("img2img") && !model.caps.includes("inpaint")) model = resolveModel("flux-2-klein-4b");
+  if (images.length && !model.caps.includes("img2img") && !model.caps.includes("inpaint")) {
+    model = model.backend === "grok" ? resolveModel("grok-imagine-image-2.0") : resolveModel("flux-2-klein-4b");
+  }
+  if (model.backend === "grok") return generateGrok(model, { prompt, images, body, onProgress });
+  if (!POOL.accounts.length) throw new PoolError("号池为空", "config", 500);
   const [width, height] = parseSize(body, model);
   const seed = body.seed == null || body.seed === "" ? undefined : Number(body.seed);
   const steps = body.steps == null || body.steps === "" ? undefined : Number(body.steps);
@@ -664,6 +674,107 @@ async function generate(body, onProgress) {
   }
   const health = await readHealth();
   throw new PoolError("连续尝试 " + tried.length + " 个账号仍失败。可用 " + health.available + "/" + health.total + "。最后错误：" + formatError(lastErr), (lastErr && lastErr.kind) || "other", 502);
+}
+
+function grokEnabled() {
+  return !!GROK_KEY;
+}
+
+function rewriteGrokUrl(raw) {
+  const text = String(raw || "").trim();
+  if (!text) return "";
+  try {
+    const u = new URL(text, GROK_BASE);
+    if (u.hostname === "127.0.0.1" || u.hostname === "localhost" || u.hostname === "0.0.0.0") {
+      const base = new URL(GROK_BASE);
+      u.protocol = base.protocol;
+      u.host = base.host;
+    }
+    return u.toString();
+  } catch {
+    return GROK_BASE + (text.startsWith("/") ? text : "/" + text);
+  }
+}
+
+async function downloadGrokImage(url) {
+  const abs = rewriteGrokUrl(url);
+  const headers = {};
+  if (GROK_KEY) headers.Authorization = "Bearer " + GROK_KEY;
+  const res = await fetch(abs, { headers });
+  if (!res.ok) throw new PoolError("Grok 图片下载失败 HTTP " + res.status, "truncated", 502);
+  const bytes = Buffer.from(await res.arrayBuffer());
+  const mime = sniffMime(bytes) || (res.headers.get("content-type") || "image/jpeg").split(";")[0];
+  if (!isCompleteImage(bytes, mime)) throw new PoolError("Grok 返回的图片不完整", "truncated", 502);
+  return { bytes, mime };
+}
+
+async function generateGrok(model, opt) {
+  if (!GROK_KEY) throw new PoolError("未配置 GROK_API_KEY，请在 Northflank 环境变量填写", "config", 500);
+  const edit = !!(opt.images && opt.images.length && model.caps.includes("img2img"));
+  const [width, height] = parseSize(opt.body || {}, model);
+  if (typeof opt.onProgress === "function") {
+    opt.onProgress({ message: edit ? "Grok 正在按参考图编辑…" : "Grok Imagine 正在出图…" });
+  }
+  const path = edit ? "/v1/images/edits" : "/v1/images/generations";
+  const payload = {
+    model: model.id,
+    prompt: opt.prompt,
+    n: 1,
+    response_format: "url",
+    size: width + "x" + height,
+  };
+  if (edit) {
+    const img = opt.images[0];
+    payload.image = { url: toDataUri(img.bytes, img.mime) };
+  }
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 180000);
+  let res;
+  try {
+    res = await fetch(GROK_BASE + path, {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer " + GROK_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+      signal: ctrl.signal,
+    });
+  } catch (err) {
+    throw new PoolError(err.name === "AbortError" ? "Grok 出图超时" : "Grok 网络错误：" + formatError(err), "truncated", 504);
+  } finally {
+    clearTimeout(timer);
+  }
+  const text = await res.text();
+  let data = {};
+  try { data = JSON.parse(text); } catch { data = {}; }
+  if (!res.ok) {
+    const message = (data.error && (data.error.message || data.error)) || data.message || text.slice(0, 180) || ("HTTP " + res.status);
+    throw new PoolError(String(message), classifyError(res.status, message), res.status);
+  }
+  const item = (data.data && data.data[0]) || data;
+  let out;
+  if (item && item.b64_json) {
+    const bytes = Buffer.from(String(item.b64_json).replace(/^data:[^;]+;base64,/, ""), "base64");
+    const mime = sniffMime(bytes) || "image/jpeg";
+    out = { bytes, mime };
+  } else if (item && item.url) {
+    out = await downloadGrokImage(item.url);
+  } else {
+    throw new PoolError("Grok 没有返回图片：" + String(text).slice(0, 180), "truncated", 502);
+  }
+  if (!isCompleteImage(out.bytes, out.mime)) throw new PoolError("Grok 图片不完整", "truncated", 502);
+  const stored = toDataUri(out.bytes, out.mime);
+  return {
+    model: model.id,
+    account: "grok",
+    mime: out.mime,
+    bytes: out.bytes,
+    image_base64: stored,
+    image_url: stored,
+    tried: 0,
+    backend: "grok",
+  };
 }
 
 function modelsPayload() {
