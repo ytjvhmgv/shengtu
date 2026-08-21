@@ -874,16 +874,51 @@ select, input[type=text], input[type=number], input[type=password] {
   margin-top: 0;
   padding: 8px 12px;
   flex: 0 0 auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
 }
 .history-head { margin-bottom: 6px; }
 .history h3 { font-size: 13px; }
+.history-track {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.hist-nav {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 64px;
+  border-radius: 12px;
+  background: var(--card-solid);
+  border: 1px solid var(--card-border);
+  color: var(--text);
+  font-size: 20px;
+  box-shadow: var(--shadow);
+}
+.hist-nav:hover { border-color: var(--primary); color: var(--primary); }
 .grid {
   display: flex;
+  flex-wrap: nowrap;
   gap: 8px;
   overflow-x: auto;
+  overflow-y: hidden;
   grid-template-columns: none;
+  min-width: 0;
+  flex: 1 1 auto;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 4px;
+  cursor: grab;
 }
-.card { min-width: 92px; flex: 0 0 92px; }
+.grid::-webkit-scrollbar { height: 8px; }
+.grid::-webkit-scrollbar-thumb {
+  background: rgba(168, 85, 247, 0.45);
+  border-radius: 999px;
+}
+.grid::-webkit-scrollbar-track { background: transparent; }
+.card { min-width: 92px; width: 92px; flex: 0 0 92px; }
 .card img { height: 64px; }
 .card .c { display: none; }
 @media (max-width: 980px) {
@@ -1108,7 +1143,11 @@ select, input[type=text], input[type=number], input[type=password] {
       <h3><span>📁 云图库 / 历史藏品</span></h3>
       <span class="pill" id="galleryMeta">本机缓存</span>
     </div>
-    <div class="grid" id="history"></div>
+    <div class="history-track">
+      <button class="hist-nav" id="histPrev" type="button" title="更早">‹</button>
+      <div class="grid" id="history"></div>
+      <button class="hist-nav" id="histNext" type="button" title="更新">›</button>
+    </div>
   </section>
 </div>
 
@@ -1430,17 +1469,57 @@ select, input[type=text], input[type=number], input[type=password] {
     renderHistory();
   }
 
+  function bindHistoryScroll() {
+    var histEl = $("history");
+    if (!histEl || histEl.dataset.bound === "1") return;
+    histEl.dataset.bound = "1";
+    histEl.addEventListener("wheel", function (e) {
+      if (Math.abs(e.deltaY) < Math.abs(e.deltaX)) return;
+      e.preventDefault();
+      histEl.scrollLeft += e.deltaY;
+    }, { passive: false });
+    var drag = { on: false, x: 0, left: 0 };
+    histEl.addEventListener("pointerdown", function (e) {
+      if (e.button && e.button !== 0) return;
+      drag.on = true;
+      drag.x = e.clientX;
+      drag.left = histEl.scrollLeft;
+      histEl.style.cursor = "grabbing";
+      try { histEl.setPointerCapture(e.pointerId); } catch (err) {}
+    });
+    histEl.addEventListener("pointermove", function (e) {
+      if (!drag.on) return;
+      if (Math.abs(e.clientX - drag.x) > 6) histEl.dataset.dragged = "1";
+      histEl.scrollLeft = drag.left - (e.clientX - drag.x);
+    });
+    function endDrag() {
+      drag.on = false;
+      histEl.style.cursor = "grab";
+      setTimeout(function () { histEl.dataset.dragged = ""; }, 40);
+    }
+    histEl.addEventListener("pointerup", endDrag);
+    histEl.addEventListener("pointercancel", endDrag);
+    var prev = $("histPrev");
+    var next = $("histNext");
+    if (prev) prev.onclick = function () { histEl.scrollBy({ left: -280, behavior: "smooth" }); };
+    if (next) next.onclick = function () { histEl.scrollBy({ left: 280, behavior: "smooth" }); };
+  }
+
   function renderHistory() {
     var histEl = $("history");
     if (!histEl) return;
     histEl.innerHTML = "";
+    bindHistoryScroll();
     state.history.forEach(function (item) {
       if (!item.image) return;
       var el = document.createElement("div");
       el.className = "card";
       el.innerHTML = "<img src=\"" + item.image + "\"><div class=\"c\">" + (item.model || "") + " · " + (item.prompt || "") + "</div>" +
         (item.key ? "<button type=\"button\" class=\"del\" title=\"从云图库删除\">×</button>" : "");
-      el.onclick = function () { showResult(item); };
+      el.onclick = function () {
+        if (histEl.dataset.dragged === "1") return;
+        showResult(item);
+      };
       var del = el.querySelector(".del");
       if (del) {
         del.onclick = async function (ev) {
