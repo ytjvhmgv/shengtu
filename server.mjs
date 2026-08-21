@@ -264,13 +264,25 @@ const server = http.createServer(async (req, res) => {
         return json(res, { error: formatError(err) }, 404);
       }
     }
+    async function deleteGallery(user, key) {
+      const item = (user.gallery || []).find((x) => x.key === key || x.id === key);
+      if (item && item.key) await deleteFromR2(item.key);
+      return authApi.removeGalleryItem(user, key);
+    }
+    if (req.method === "POST" && p === "/api/gallery/delete") {
+      const user = await requireUser(req, res, false);
+      if (!user) return;
+      const body = await readBody(req);
+      const key = String(body.key || body.id || "");
+      if (!key) return json(res, { error: "缺少图片 key" }, 400);
+      const items = await deleteGallery(user, key);
+      return json(res, { ok: true, items, storedCount: items.length });
+    }
     if (req.method === "DELETE" && p.startsWith("/api/gallery/")) {
       const user = await requireUser(req, res, false);
       if (!user) return;
       const key = decodeURIComponent(p.slice("/api/gallery/".length));
-      const item = (user.gallery || []).find((x) => x.key === key || x.id === key);
-      if (item && item.key) await deleteFromR2(item.key);
-      const items = await authApi.removeGalleryItem(user, key);
+      const items = await deleteGallery(user, key);
       return json(res, { ok: true, items, storedCount: items.length });
     }
     if (req.method === "GET" && p === "/api/me") {
