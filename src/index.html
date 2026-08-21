@@ -1036,7 +1036,7 @@ select, input[type=text], input[type=number], input[type=password] {
       <!-- Advanced settings -->
       <details class="adv-details" id="advDetails">
         <summary class="adv-toggle" id="advBtn">
-          <span>⚙️ 高级咒文参数（种子 / 步数 / 访问密钥）</span>
+          <span>⚙️ 高级咒文参数（种子 / 步数 / Grok 分辨率）</span>
           <span style="font-size:12px;opacity:0.75;">▼ 展开/收起</span>
         </summary>
         <div class="adv" id="adv">
@@ -1050,7 +1050,23 @@ select, input[type=text], input[type=number], input[type=password] {
               <input id="steps" type="number" placeholder="留空用模型默认">
             </div>
           </div>
-          <label style="font-size:11px;color:var(--text-muted);margin-bottom:4px;display:block;">反向提示词 (Negative)</label>
+          <div class="row" style="margin-top:8px">
+            <div>
+              <label style="font-size:11px;color:var(--text-muted);margin-bottom:4px;display:block;">Grok 分辨率</label>
+              <select id="grokRes">
+                <option value="1k" selected>1k</option>
+                <option value="2k">2k</option>
+              </select>
+            </div>
+            <div>
+              <label style="font-size:11px;color:var(--text-muted);margin-bottom:4px;display:block;">Grok 质量</label>
+              <select id="grokQuality">
+                <option value="medium" selected>medium</option>
+                <option value="low">low</option>
+              </select>
+            </div>
+          </div>
+          <label style="font-size:11px;color:var(--text-muted);margin:8px 0 4px;display:block;">反向提示词 (Negative)</label>
           <input id="negative" type="text" placeholder="例如：lowres, blurry, extra fingers, watermark">
           <label style="font-size:11px;color:var(--text-muted);margin:8px 0 4px;display:block;">访问密钥 (ACCESS_KEY)</label>
           <input id="apiKey" type="password" placeholder="未设置密码时请留空">
@@ -1606,6 +1622,8 @@ select, input[type=text], input[type=number], input[type=password] {
       var seedVal = $("seed") ? $("seed").value : "";
       var stepsVal = $("steps") ? $("steps").value : "";
       var negativeVal = $("negative") ? $("negative").value.trim() : "";
+      var grokRes = $("grokRes") ? $("grokRes").value : "1k";
+      var grokQuality = $("grokQuality") ? $("grokQuality").value : "medium";
 
       var payload = {
         prompt: ((document.querySelector('#styles input[name="style"]:checked') || {}).value || state.style || "") + prompt,
@@ -1615,6 +1633,10 @@ select, input[type=text], input[type=number], input[type=password] {
       if (seedVal) payload.seed = Number(seedVal);
       if (stepsVal) payload.steps = Number(stepsVal);
       if (negativeVal) payload.negative_prompt = negativeVal;
+      if (String(m).indexOf("grok-imagine") === 0) {
+        payload.resolution = grokRes || "1k";
+        payload.quality = grokQuality || "medium";
+      }
       if (state.images.length) payload.images = state.images;
 
       setStatus(m === "flux-2-dev" ? "✨ FLUX.2 Dev 深度绘制中，流式连接已建立…" : "✨ 正在绘制二次元画卷…");
