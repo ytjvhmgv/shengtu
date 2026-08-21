@@ -980,6 +980,13 @@ select, input[type=text], input[type=number], input[type=password] {
           <option value="sd15-img2img">SD 1.5 图生图 · 必须参考图</option>
           <option value="sd15-inpaint">SD 1.5 局部重绘 · 原图+遮罩</option>
         </optgroup>
+        <optgroup label="Grok Imagine">
+          <option value="grok-imagine-image-2.0">Grok Imagine 2.0 · 生图+编辑</option>
+          <option value="grok-imagine-image-quality">Grok Imagine Quality · 高质量</option>
+          <option value="grok-imagine-image">Grok Imagine · 标准</option>
+          <option value="grok-imagine-image-lite">Grok Imagine Lite · 更快</option>
+          <option value="grok-imagine-image-edit">Grok Imagine Edit · 只编辑</option>
+        </optgroup>
         <optgroup label="视觉模型">
           <option value="moondream3.1-9B-A2B">Moondream 3.1 · 视觉看图问答</option>
         </optgroup>
@@ -1339,6 +1346,8 @@ select, input[type=text], input[type=number], input[type=password] {
         else if (m === "sd15-img2img") setStatus("SD 1.5 图生图：请先上传 1 张参考图，再写要变成什么样。");
         else if (m === "sd15-inpaint") setStatus("局部重绘：第 1 张是原图，第 2 张是遮罩（白色=要改的区域）。");
         else if (m === "lucid-origin" || m === "phoenix-1.0") setStatus("Leonardo 模型走现有号池，不支持参考图；上传参考图会自动改用 FLUX 图生图。");
+        else if (String(m).indexOf("grok-imagine-image-edit") === 0) setStatus("Grok 编辑：请先上传参考图，提示词写要改成什么样。");
+        else if (String(m).indexOf("grok-imagine") === 0) setStatus("Grok Imagine 走独立网关。不传参考图=生图，上传参考图=编辑。");
         else setStatus("快捷键：Ctrl + Enter。单号额度耗尽将自动轮询下一节点。");
       }
     });
@@ -1569,6 +1578,7 @@ select, input[type=text], input[type=number], input[type=password] {
       var m = modelEl ? modelEl.value : "flux-2-klein-4b";
       if (m === "sd15-img2img" && !state.images.length) throw new Error("SD 1.5 图生图必须先上传参考图");
       if (m === "sd15-inpaint" && !state.images.length) throw new Error("局部重绘必须先上传原图，第二张作为遮罩");
+      if (m === "grok-imagine-image-edit" && !state.images.length) throw new Error("Grok 编辑必须先上传参考图");
       if (m === "moondream3.1-9B-A2B") {
         if (!state.images.length) throw new Error("Moondream 必须先上传至少 1 张参考图");
         var vis = await api("/api/vision", {
