@@ -138,22 +138,72 @@ export function createAuth({ redisCmd, useUpstash, dataDir }) {
     const usedToday = plan && plan.usedDate === today ? (plan.usedToday || 0) : 0;
     const expired = !!(plan && plan.expiresAt && plan.expiresAt < Date.now());
     const dailyLimit = plan ? Number(plan.dailyLimit || 0) : 0;
+    const storedCount = Array.isArray(user.gallery) ? user.gallery.length : Number(user.storedCount || 0);
+    const storageLimit = isAdminUser(user) ? 99999 : Number((plan && plan.storageLimit) ?? 50);
     return {
       id: user.id,
       username: user.username,
       name: user.name || user.username,
       avatar: user.avatar || "",
       admin: isAdminUser(user),
+      storageLimit,
+      storedCount,
       plan: plan ? {
         code: plan.code,
         dailyLimit,
         usedToday,
         remainingToday: Math.max(0, dailyLimit - usedToday),
+        storageLimit: Number(plan.storageLimit ?? 50),
         expiresAt: plan.expiresAt || 0,
         expired,
         daysLeft: plan.expiresAt ? Math.max(0, Math.ceil((plan.expiresAt - Date.now()) / 86400000)) : 0,
       } : null,
     };
+  }
+
+  async function addGalleryItem(user, item) {
+    const limit = isAdminUser(user) ? 99999 : Number((user.plan && user.plan.storageLimit) ?? 50);
+    const gallery = Array.isArray(user.gallery) ? user.gallery.slice() : [];
+    if (!isAdminUser(user) && limit > 0 && gallery.length >= limit) {
+      const err = new Error("图库已满（上限 " + limit + " 张）。请删除旧图或联系管理员提高上限");
+      err.status = 403;
+      err.kind = "storage";
+      throw err;
+    }
+    gallery.unshift(item);
+    user.gallery = gallery.slice(0, isAdminUser(user) ? 500 : (limit > 0 ? limit : gallery.length));
+    user.storedCount = user.gallery.length;
+    await kvSet("fluxpool:user:" + user.id, user);
+    return user.gallery;
+  }
+  async function listGallery(user) {
+    return Array.isArray(user.gallery) ? user.gallery : [];
+  }
+  async function removeGalleryItem(user, key) {
+    user.gallery = (user.gallery || []).filter((x) => x.key !== key && x.id !== key);
+    user.storedCount = user.gallery.length;
+    await kvSet("fluxpool:user:" + user.id, user);
+    return user.gallery;
+  }
+  async function updateUserPlan(id, patch) {
+    const user = await kvGet("fluxpool:user:" + String(id));
+    if (!user) {
+      const err = new Error("用户不存在");
+      err.status = 404;
+      throw err;
+    }
+    user.plan = user.plan || {};
+    if (patch.storageLimit != null && patch.storageLimit !== "") {
+      user.plan.storageLimit = Math.max(0, Number(patch.storageLimit));
+    }
+    if (patch.dailyLimit != null && patch.dailyLimit !== "") {
+      user.plan.dailyLimit = Math.max(1, Number(patch.dailyLimit));
+    }
+    if (patch.days != null && patch.days !== "") {
+      user.plan.expiresAt = Date.now() + Math.max(1, Number(patch.days)) * 86400000;
+    }
+    await kvSet("fluxpool:user:" + user.id, user);
+    return publicUser(user);
   }
 
   async function consumeQuota(user) {
@@ -273,12 +323,14 @@ export function createAuth({ redisCmd, useUpstash, dataDir }) {
     const dailyLimit = Math.max(1, Number(body.dailyLimit || body.daily || 10));
     const days = Math.max(1, Number(body.days || body.durationDays || 7));
     const maxRedeems = Math.max(1, Number(body.maxRedeems || body.maxUses || 1));
+    const storageLimit = Math.max(0, Number(body.storageLimit || body.galleryLimit || 50));
     const code = String(body.code || genCode()).toUpperCase();
     const row = {
       code,
       dailyLimit,
       days,
       maxRedeems,
+      storageLimit,
       usedCount: 0,
       note: String(body.note || ""),
       createdBy: admin.username,
@@ -301,6 +353,7 @@ export function createAuth({ redisCmd, useUpstash, dataDir }) {
     user.plan = {
       code,
       dailyLimit: row.dailyLimit,
+      storageLimit: Number(row.storageLimit || 50),
       expiresAt: Date.now() + row.days * 86400000,
       usedToday: 0,
       usedDate: "",
@@ -325,6 +378,10 @@ export function createAuth({ redisCmd, useUpstash, dataDir }) {
     createCode,
     redeem,
     listPrefix,
+    addGalleryItem,
+    listGallery,
+    removeGalleryItem,
+    updateUserPlan,
     cookieHeader,
     parseCookies,
     isAdminUser,
