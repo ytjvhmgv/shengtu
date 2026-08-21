@@ -707,7 +707,9 @@ details[open] summary.adv-toggle { border-color:var(--primary); color:var(--prim
   display: none;
   align-items: center;
   justify-content: center;
-  z-index: 2;
+  z-index: 5;
+  pointer-events: auto;
+  line-height: 1;
 }
 .card:hover .del { display: flex; }
 .card .c {
@@ -918,8 +920,8 @@ select, input[type=text], input[type=number], input[type=password] {
   border-radius: 999px;
 }
 .grid::-webkit-scrollbar-track { background: transparent; }
-.card { min-width: 92px; width: 92px; flex: 0 0 92px; }
-.card img { height: 64px; }
+.card { min-width: 92px; width: 92px; flex: 0 0 92px; overflow: hidden; }
+.card img { height: 64px; pointer-events: none; }
 .card .c { display: none; }
 @media (max-width: 980px) {
   html, body { overflow: auto; height: auto; }
@@ -1478,27 +1480,76 @@ select, input[type=text], input[type=number], input[type=password] {
       e.preventDefault();
       histEl.scrollLeft += e.deltaY;
     }, { passive: false });
-    var drag = { on: false, x: 0, left: 0 };
+    function eventEl(e) {
+      var t = e && e.target;
+      if (t && t.nodeType === 3) t = t.parentElement;
+      return t;
+    }
+    async function deleteGalleryItem(item) {
+      if (!item || !item.key) {
+        toast("这张图没有云端记录，无法删除");
+        return;
+      }
+      try {
+        await api("/api/gallery/delete", { method: "POST", body: JSON.stringify({ key: item.key, id: item.id }) });
+        toast("已从云图库删除");
+        loadGallery();
+      } catch (err) {
+        toast(err.message || "删除失败");
+      }
+    }
+    var drag = { on: false, dragging: false, x: 0, left: 0 };
     histEl.addEventListener("pointerdown", function (e) {
       if (e.button && e.button !== 0) return;
+      var t = eventEl(e);
+      if (t && t.closest && t.closest(".del")) {
+        e.stopPropagation();
+        return;
+      }
       drag.on = true;
+      drag.dragging = false;
       drag.x = e.clientX;
       drag.left = histEl.scrollLeft;
-      histEl.style.cursor = "grabbing";
-      try { histEl.setPointerCapture(e.pointerId); } catch (err) {}
     });
     histEl.addEventListener("pointermove", function (e) {
       if (!drag.on) return;
-      if (Math.abs(e.clientX - drag.x) > 6) histEl.dataset.dragged = "1";
-      histEl.scrollLeft = drag.left - (e.clientX - drag.x);
+      var dx = e.clientX - drag.x;
+      if (!drag.dragging && Math.abs(dx) < 12) return;
+      drag.dragging = true;
+      histEl.style.cursor = "grabbing";
+      histEl.scrollLeft = drag.left - dx;
     });
-    function endDrag() {
+    histEl.addEventListener("click", function (e) {
+      var t = eventEl(e);
+      var del = t && t.closest ? t.closest(".del") : null;
+      if (!del) return;
+      e.preventDefault();
+      e.stopPropagation();
+      var card = del.closest(".card");
+      var idx = card ? Number(card.getAttribute("data-idx")) : -1;
+      deleteGalleryItem(state.history[idx]);
+    });
+    function endDrag(e) {
+      var wasDrag = drag.dragging;
       drag.on = false;
+      drag.dragging = false;
       histEl.style.cursor = "grab";
-      setTimeout(function () { histEl.dataset.dragged = ""; }, 40);
+      if (wasDrag) return;
+      var t = eventEl(e);
+      if (!t) return;
+      if (t.closest && t.closest(".del")) return;
+      var card = t.closest ? t.closest(".card") : null;
+      if (!card) return;
+      var idx = Number(card.getAttribute("data-idx"));
+      var item = state.history[idx];
+      if (item && item.image) showResult(item);
     }
     histEl.addEventListener("pointerup", endDrag);
-    histEl.addEventListener("pointercancel", endDrag);
+    histEl.addEventListener("pointercancel", function () {
+      drag.on = false;
+      drag.dragging = false;
+      histEl.style.cursor = "grab";
+    });
     var prev = $("histPrev");
     var next = $("histNext");
     if (prev) prev.onclick = function () { histEl.scrollBy({ left: -280, behavior: "smooth" }); };
@@ -1510,29 +1561,13 @@ select, input[type=text], input[type=number], input[type=password] {
     if (!histEl) return;
     histEl.innerHTML = "";
     bindHistoryScroll();
-    state.history.forEach(function (item) {
+    state.history.forEach(function (item, idx) {
       if (!item.image) return;
       var el = document.createElement("div");
       el.className = "card";
+      el.setAttribute("data-idx", String(idx));
       el.innerHTML = "<img src=\"" + item.image + "\"><div class=\"c\">" + (item.model || "") + " · " + (item.prompt || "") + "</div>" +
-        (item.key ? "<button type=\"button\" class=\"del\" title=\"从云图库删除\">×</button>" : "");
-      el.onclick = function () {
-        if (histEl.dataset.dragged === "1") return;
-        showResult(item);
-      };
-      var del = el.querySelector(".del");
-      if (del) {
-        del.onclick = async function (ev) {
-          ev.stopPropagation();
-          try {
-            await api("/api/gallery/" + encodeURIComponent(item.key), { method: "DELETE" });
-            toast("已从云图库删除");
-            loadGallery();
-          } catch (err) {
-            toast(err.message || "删除失败");
-          }
-        };
-      }
+        (item.key ? "<button type=\"button\" class=\"del\" title=\"从云图库删除\" data-key=\"" + String(item.key).replace(/"/g, "") + "\">×</button>" : "");
       histEl.appendChild(el);
     });
   }
