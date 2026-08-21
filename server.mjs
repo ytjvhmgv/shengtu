@@ -708,10 +708,25 @@ async function downloadGrokImage(url) {
   return { bytes, mime };
 }
 
+function grokAspect(body) {
+  const ratio = String((body && body.aspect_ratio) || "1:1");
+  return { "1:1": "1:1", "16:9": "16:9", "9:16": "9:16", "2:3": "2:3", "3:2": "3:2", "4:3": "4:3", "3:4": "3:4" }[ratio] || "1:1";
+}
+
+function grokResolution(body) {
+  const raw = String((body && (body.resolution || body.grok_resolution)) || "1k").toLowerCase();
+  return raw === "2k" ? "2k" : "1k";
+}
+
+function grokQuality(body) {
+  const raw = String((body && (body.quality || body.grok_quality)) || "medium").toLowerCase();
+  return raw === "low" ? "low" : "medium";
+}
+
 async function generateGrok(model, opt) {
   if (!GROK_KEY) throw new PoolError("未配置 GROK_API_KEY，请在 Northflank 环境变量填写", "config", 500);
+  const body = opt.body || {};
   const edit = !!(opt.images && opt.images.length && model.caps.includes("img2img"));
-  const [width, height] = parseSize(opt.body || {}, model);
   if (typeof opt.onProgress === "function") {
     opt.onProgress({ message: edit ? "Grok 正在按参考图编辑…" : "Grok Imagine 正在出图…" });
   }
@@ -720,12 +735,19 @@ async function generateGrok(model, opt) {
     model: model.id,
     prompt: opt.prompt,
     n: 1,
-    response_format: "url",
-    size: width + "x" + height,
+    quality: grokQuality(body),
+    response_format: "b64_json",
+    stream: false,
   };
+  if (!edit) payload.aspect_ratio = grokAspect(body);
+  if (!edit) payload.resolution = grokResolution(body);
   if (edit) {
-    const img = opt.images[0];
-    payload.image = { url: toDataUri(img.bytes, img.mime) };
+    const refs = (opt.images || []).map((img) => {
+      const dataUrl = toDataUri(img.bytes, img.mime);
+      return { url: dataUrl };
+    });
+    payload.image = refs[0];
+    payload.images = refs;
   }
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 180000);
