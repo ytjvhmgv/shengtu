@@ -694,6 +694,22 @@ details[open] summary.adv-toggle { border-color:var(--primary); color:var(--prim
   display: block;
 }
 
+.card .del {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(15, 10, 25, 0.62);
+  color: #fff;
+  font-size: 14px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+.card:hover .del { display: flex; }
 .card .c {
   padding: 8px 10px;
   font-size: 11px;
@@ -1051,7 +1067,8 @@ select, input[type=text], input[type=number], input[type=password] {
   <!-- History Gallery -->
   <section class="history">
     <div class="history-head">
-      <h3><span>📁 历史星辰藏品</span></h3>
+      <h3><span>📁 云图库 / 历史藏品</span></h3>
+      <span class="pill" id="galleryMeta">本机缓存</span>
     </div>
     <div class="grid" id="history"></div>
   </section>
@@ -1061,7 +1078,7 @@ select, input[type=text], input[type=number], input[type=password] {
 
 <script>
 (function () {
-  var state = { ratio: "1:1", style: "", images: [], history: [], timer: null };
+  var state = { ratio: "1:1", style: "", images: [], history: [], timer: null, cloud: false, storageLimit: 0, r2: false };
 
   function $(id) { return document.getElementById(id); }
   
@@ -1238,8 +1255,18 @@ select, input[type=text], input[type=number], input[type=password] {
         if (me.user.admin) planInfo.textContent = "管理员账号，不限制生图张数。";
         else if (!me.user.plan) planInfo.textContent = "尚未兑换优惠码，无法生图。";
         else if (me.user.plan.expired) planInfo.textContent = "优惠码已过期。";
-        else planInfo.textContent = "今日剩余 " + me.user.plan.remainingToday + " / " + me.user.plan.dailyLimit + " 张 · 还可使用 " + me.user.plan.daysLeft + " 天";
+        else {
+          var storage = (me.user.storedCount || 0) + "/" + (me.user.storageLimit || me.user.plan.storageLimit || 0);
+          planInfo.textContent = "今日剩余 " + me.user.plan.remainingToday + " / " + me.user.plan.dailyLimit + " 张 · 还可使用 " + me.user.plan.daysLeft + " 天 · 云图库 " + storage;
+        }
       }
+      var apiKeyEl2 = $("apiKey");
+      if (apiKeyEl2 && me.authEnabled) {
+        apiKeyEl2.style.display = "none";
+        var lab = apiKeyEl2.previousElementSibling;
+        if (lab) lab.style.display = "none";
+      }
+      loadGallery();
     } catch (e) {}
   }
   var redeemBtn = $("redeemBtn");
@@ -1306,12 +1333,13 @@ select, input[type=text], input[type=number], input[type=password] {
       try { localStorage.removeItem("fluxpool-history"); } catch (e) {}
       rawHist = "[]";
     }
-    state.history = JSON.parse(rawHist).filter(function (item) { return item && item.image; }).slice(0, 8);
+    state.history = JSON.parse(rawHist).filter(function (item) { return item && item.image; }).slice(0, 12);
   } catch (e) {
     state.history = [];
   }
 
   function saveHistory() {
+    if (state.cloud) return;
     try {
       var slim = state.history.slice(0, 8).map(function (item) {
         return {
@@ -1326,6 +1354,39 @@ select, input[type=text], input[type=number], input[type=password] {
     } catch (e) {}
   }
 
+  function galleryItem(row) {
+    return {
+      id: row.id,
+      key: row.key,
+      prompt: row.prompt || "",
+      model: row.model || "",
+      account: row.account || "",
+      duration_sec: row.duration_sec,
+      image: row.url || row.image_url || row.image || "",
+      ts: row.createdAt || row.ts || Date.now(),
+      stored: true
+    };
+  }
+
+  async function loadGallery() {
+    var meta = $("galleryMeta");
+    try {
+      var data = await api("/api/gallery");
+      state.r2 = !!data.r2;
+      state.storageLimit = Number(data.storageLimit || 0);
+      if (data.r2) {
+        state.cloud = true;
+        state.history = (data.items || []).map(galleryItem).filter(function (item) { return item.image; });
+        if (meta) meta.textContent = "云图库 " + (data.storedCount || 0) + " / " + (data.storageLimit || 0);
+        renderHistory();
+        return;
+      }
+    } catch (e) {}
+    state.cloud = false;
+    if (meta) meta.textContent = "本机缓存";
+    renderHistory();
+  }
+
   function renderHistory() {
     var histEl = $("history");
     if (!histEl) return;
@@ -1334,8 +1395,22 @@ select, input[type=text], input[type=number], input[type=password] {
       if (!item.image) return;
       var el = document.createElement("div");
       el.className = "card";
-      el.innerHTML = "<img src=\"" + item.image + "\"><div class=\"c\">" + (item.model || "") + " · " + (item.prompt || "") + "</div>";
+      el.innerHTML = "<img src=\"" + item.image + "\"><div class=\"c\">" + (item.model || "") + " · " + (item.prompt || "") + "</div>" +
+        (item.key ? "<button type=\"button\" class=\"del\" title=\"从云图库删除\">×</button>" : "");
       el.onclick = function () { showResult(item); };
+      var del = el.querySelector(".del");
+      if (del) {
+        del.onclick = async function (ev) {
+          ev.stopPropagation();
+          try {
+            await api("/api/gallery/" + encodeURIComponent(item.key), { method: "DELETE" });
+            toast("已从云图库删除");
+            loadGallery();
+          } catch (err) {
+            toast(err.message || "删除失败");
+          }
+        };
+      }
       histEl.appendChild(el);
     });
   }
@@ -1513,7 +1588,7 @@ select, input[type=text], input[type=number], input[type=password] {
       setStatus(m === "flux-2-dev" ? "✨ FLUX.2 Dev 深度绘制中，流式连接已建立…" : "✨ 正在绘制二次元画卷…");
       
       var data = await generateStream(payload);
-      var image = data.image_base64 || data.image_url;
+      var image = data.image_url || data.image_base64;
       if (!image) throw new Error("未返回有效图像");
 
       var item = {
@@ -1522,17 +1597,23 @@ select, input[type=text], input[type=number], input[type=password] {
         account: data.account,
         duration_sec: data.duration_sec,
         image: image,
+        key: data.storage_key,
         ts: Date.now()
       };
 
       showResult(item);
-      state.history.unshift(item);
-      state.history = state.history.slice(0, 8);
-      saveHistory();
-      renderHistory();
+      if (state.cloud) {
+        await loadGallery();
+        loadMe();
+      } else {
+        state.history.unshift(item);
+        state.history = state.history.slice(0, 12);
+        saveHistory();
+        renderHistory();
+      }
       
-      setStatus("🎉 绘卷降临 · 节点 " + (data.account || "号池") + (data.tried ? " (跳过 " + data.tried + " 个不可用号)" : ""), "ok");
-      toast("✨ 绘卷降临！");
+      setStatus("🎉 绘卷降临 · 节点 " + (data.account || "号池") + (data.tried ? " (跳过 " + data.tried + " 个不可用号)" : "") + (data.stored ? " · 已存入云图库" : ""), "ok");
+      toast(data.store_error ? ("出图成功，但未入库：" + data.store_error) : "✨ 绘卷降临！");
       loadHealth();
     } catch (err) {
       var msg = err.message || String(err);
